@@ -15,7 +15,10 @@
       <h1 class="text-lg font-bold tracking-tight">Client Pulse</h1>
       <div id="stats" class="text-sm mt-0.5 text-gray-500"></div>
     </div>
-    <div id="today-display" class="text-sm text-gray-400 font-medium"></div>
+    <div class="flex items-center gap-4">
+      <div id="today-display" class="text-sm text-gray-400 font-medium"></div>
+      <button id="btn-add-client" class="px-4 py-2 text-sm font-medium text-white bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors">+ Add Client</button>
+    </div>
   </header>
 
   <!-- Controls -->
@@ -32,6 +35,7 @@
     <!-- Health filter -->
     <select id="filter-health" class="text-sm border border-gray-200 rounded-lg px-3 py-1.5 text-gray-600 bg-white cursor-pointer">
       <option value="">All health</option>
+      <option value="🆕 Onboarding">🆕 Onboarding</option>
       <option value="✅ Momentum">✅ Momentum</option>
       <option value="🔸 Cruising">🔸 Cruising</option>
       <option value="🚩 Attention">🚩 Attention</option>
@@ -62,7 +66,11 @@
     </table>
   </div>
 
+  <!-- Modal container -->
+  <div id="add-client-modal" class="hidden"></div>
+
   <script src="dateEngine.js"></script>
+  <script src="addClient.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

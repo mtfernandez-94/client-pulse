@@ -1,6 +1,17 @@
 {
   "schema_version": "1.0",
   "description": "Single source of truth for client data structure. All UI components and calculations read from this. To add a new field: add it here, and the app adapts.",
+  "table_columns": [
+    { "key": "name",                   "label": "Name",               "cell_type": "name",         "sortable": true,  "sort_key": "name" },
+    { "key": "health",                 "label": "Health",             "cell_type": "health_badge", "sortable": true,  "sort_key": "health" },
+    { "key": "status",                 "label": "Status",             "cell_type": "status_badge" },
+    { "key": "contract.term",          "label": "Term",               "cell_type": "text" },
+    { "key": "payment",                "label": "Payment",            "cell_type": "payment" },
+    { "key": "dates.program_start",    "label": "Program Start",      "cell_type": "date" },
+    { "key": "calc.end_of_commitment", "label": "End of Commitment",  "cell_type": "calc_date",    "sortable": true,  "sort_key": "endDate" },
+    { "key": "calc.renew_contact",     "label": "Renew Contact",      "cell_type": "renewal_flag", "sortable": true,  "sort_key": "renewalUrgency" },
+    { "key": "calc.next_review",       "label": "Next Review",        "cell_type": "review_flag" }
+  ],
   "fields": {
     "name": {
       "type": "string",
@@ -19,7 +30,8 @@
     "health": {
       "type": "enum",
       "required": false,
-      "options": ["✅ Momentum", "🔸 Cruising", "🚩 Attention", "⏸️ Pause"],
+      "options": ["🆕 Onboarding", "✅ Momentum", "🔸 Cruising", "🚩 Attention", "⏸️ Pause"],
+      "default": "🆕 Onboarding",
       "label": "Client Health",
       "ui_step": 1
     },

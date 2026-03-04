@@ -6,6 +6,7 @@ let allClients   = [];
 let tableColumns = [];   // from schema.json
 let termToDays   = {};   // from schema.json — e.g. { '12wks': 84, '16wks': 112, ... }
 let bonusToDays  = {};   // from schema.json — e.g. { '1mth': 30, '2mth': 61 }
+let schemaCache  = null; // full schema object, used by addClient modal
 let filterStatus = 'active';
 let filterHealth = '';
 let filterTerm   = '';
@@ -14,8 +15,9 @@ let sortDir = 'asc';
 
 // ── Style maps ────────────────────────────────────────────────────────────────
 
-const HEALTH_ORDER = { '✅ Momentum': 0, '🔸 Cruising': 1, '🚩 Attention': 2, '⏸️ Pause': 3 };
+const HEALTH_ORDER = { '🆕 Onboarding': 0, '✅ Momentum': 1, '🔸 Cruising': 2, '🚩 Attention': 3, '⏸️ Pause': 4 };
 const HEALTH_STYLE = {
+  '🆕 Onboarding': 'bg-blue-100 text-blue-800',
   '✅ Momentum': 'bg-emerald-100 text-emerald-800',
   '🔸 Cruising': 'bg-amber-100 text-amber-800',
   '🚩 Attention': 'bg-red-100 text-red-800',
@@ -42,7 +44,7 @@ function getCalc(key) {
 // ── Filter & sort ─────────────────────────────────────────────────────────────
 
 function getVisible() {
-  let list = allClients.map(c => ({ ...c, _health: normaliseHealth(c.health) }));
+  let list = allClients.map((c, i) => ({ ...c, _health: normaliseHealth(c.health), _idx: i }));
 
   if (filterStatus !== 'all') list = list.filter(c => c.status === filterStatus);
   if (filterHealth)            list = list.filter(c => c._health === filterHealth);
@@ -113,12 +115,23 @@ const TD = 'px-4 py-3 whitespace-nowrap';
 const TD_MUTED = `${TD} text-gray-600`;
 
 function renderCell(client, col) {
+  const idx = client._idx;
+
   switch (col.cell_type) {
     case 'name':
-      return `<td class="${TD} font-medium">${client.name}</td>`;
+      return `<td class="${TD} font-medium">
+        <span class="cursor-pointer hover:text-blue-600 hover:underline" onclick="openEditModal(${idx})">${client.name}</span>
+      </td>`;
 
-    case 'health_badge':
-      return `<td class="${TD}">${healthBadge(client._health)}</td>`;
+    case 'health_badge': {
+      const options = schemaCache?.fields?.health?.options || [];
+      const opts = options.map(o => `<option value="${o}" ${o === client._health ? 'selected' : ''}>${o}</option>`).join('');
+      return `<td class="${TD}">
+        <select onchange="updateHealth(${idx}, this.value)" class="appearance-none bg-transparent border-0 cursor-pointer text-xs font-medium focus:ring-0 p-0">
+          ${opts}
+        </select>
+      </td>`;
+    }
 
     case 'status_badge':
       return `<td class="${TD}">${statusBadge(client.status)}</td>`;
@@ -279,6 +292,149 @@ function setupEvents() {
   });
 }
 
+// ── Inline editing ────────────────────────────────────────────────────────────
+
+function saveClients() {
+  localStorage.setItem('clientPulse_clients', JSON.stringify(allClients));
+}
+
+function updateHealth(idx, value) {
+  allClients[idx].health = value;
+  saveClients();
+  render();
+}
+
+function openEditModal(idx) {
+  const client = allClients[idx];
+  if (!client || !schemaCache) return;
+
+  const f = schemaCache.fields;
+  const modal = document.getElementById('add-client-modal');
+  modal.classList.remove('hidden');
+
+  const inputCls = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none';
+
+  function selectOpts(options, selected) {
+    return options.map(o => `<option value="${o}" ${o === selected ? 'selected' : ''}>${o}</option>`).join('');
+  }
+
+  modal.innerHTML = `
+    <div class="fixed inset-0 bg-black/40 z-40" onclick="closeModal()"></div>
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-hidden">
+        <div class="px-6 pt-5 pb-4 border-b border-gray-100 flex items-center justify-between">
+          <h2 class="text-lg font-bold text-gray-900">Edit: ${client.name}</h2>
+          <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+        </div>
+        <div class="px-6 py-5 overflow-y-auto max-h-[65vh] space-y-6">
+
+          <div>
+            <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Client</h3>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Name</label>
+              <input type="text" id="edit-name" class="${inputCls}" value="${client.name}">
+            </div>
+          </div>
+
+          <div>
+            <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Contract</h3>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Term</label>
+                <select id="edit-term" class="${inputCls} bg-white">${selectOpts(f.contract.fields.term.options, client.contract?.term)}</select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Bonus Term</label>
+                <select id="edit-bonus" class="${inputCls} bg-white">
+                  <option value="">None</option>
+                  ${selectOpts(f.contract.fields.bonus_term.options, client.contract?.bonus_term)}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Payment</h3>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Period</label>
+                <select id="edit-period" class="${inputCls} bg-white">${selectOpts(f.payment.fields.period.options, client.payment?.period)}</select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Processor</label>
+                <select id="edit-processor" class="${inputCls} bg-white">${selectOpts(f.payment.fields.processor.options, client.payment?.processor)}</select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Currency</label>
+                <select id="edit-currency" class="${inputCls} bg-white">${selectOpts(f.payment.fields.currency.options, client.payment?.currency)}</select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Amount</label>
+                <input type="number" id="edit-amount" class="${inputCls}" value="${client.payment?.amount ?? ''}" step="any">
+              </div>
+            </div>
+            <div class="flex items-center gap-3 mt-2">
+              <input type="checkbox" id="edit-gst" class="w-4 h-4 rounded border-gray-300 text-blue-500" ${client.payment?.gst ? 'checked' : ''}>
+              <label for="edit-gst" class="text-sm font-medium text-gray-700">GST Applies</label>
+            </div>
+          </div>
+
+          <div>
+            <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Dates</h3>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Client Start</label>
+                <input type="date" id="edit-client-start" class="${inputCls}" value="${client.dates?.client_start || ''}">
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Program Start</label>
+                <input type="date" id="edit-program-start" class="${inputCls}" value="${client.dates?.program_start || ''}">
+              </div>
+            </div>
+          </div>
+
+        </div>
+        <div class="px-6 py-4 border-t border-gray-100 flex justify-end">
+          <button onclick="saveEdit(${idx})" class="px-5 py-2 text-sm font-medium text-white bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors">
+            Save Changes ✓
+          </button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function saveEdit(idx) {
+  const val = id => document.getElementById(id)?.value || '';
+  const num = id => { const v = document.getElementById(id)?.value; return v === '' ? 0 : Number(v); };
+  const chk = id => document.getElementById(id)?.checked || false;
+
+  const c = allClients[idx];
+  c.name = val('edit-name');
+  c.contract = {
+    ...c.contract,
+    term:       val('edit-term'),
+    bonus_term: val('edit-bonus') || null,
+  };
+  c.payment = {
+    ...c.payment,
+    period:    val('edit-period'),
+    currency:  val('edit-currency'),
+    amount:    num('edit-amount'),
+    gst:       chk('edit-gst'),
+    processor: val('edit-processor'),
+  };
+  c.dates = {
+    ...c.dates,
+    client_start:  val('edit-client-start'),
+    program_start: val('edit-program-start'),
+  };
+
+  saveClients();
+  closeModal();
+  render();
+  renderStats();
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 async function init() {
@@ -291,10 +447,19 @@ async function init() {
     const data   = await clientsRes.json();
 
     // Load schema config — date engine reads these, not hardcoded constants
+    schemaCache  = schema;
     tableColumns = schema.table_columns;
     termToDays   = schema.fields.dates.term_to_days;
     bonusToDays  = schema.fields.dates.bonus_to_days;
-    allClients   = data.clients;
+
+    // Load clients: localStorage (has any adds/edits) → fallback to seed data
+    const saved = localStorage.getItem('clientPulse_clients');
+    allClients  = saved ? JSON.parse(saved) : data.clients;
+
+    // Wire add-client button
+    document.getElementById('btn-add-client')?.addEventListener('click', () => {
+      openAddClientModal(schemaCache);
+    });
 
     renderHeaders();
     renderStats();

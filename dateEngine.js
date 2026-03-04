@@ -137,7 +137,8 @@ function urgencyScore(c, termToDays, bonusToDays) {
 function normaliseHealth(h) {
   if (!h) return null;
   const s = h.trim().replace(/\s+/g, ' ');
-  if (s.includes('Momentum')) return '✅ Momentum';
+  if (s.includes('Onboarding')) return '🆕 Onboarding';
+  if (s.includes('Momentum'))  return '✅ Momentum';
   if (s.includes('Cruising'))  return '🔸 Cruising';
   if (s.includes('Attention')) return '🚩 Attention';
   if (s.includes('Pause'))     return '⏸️ Pause';
