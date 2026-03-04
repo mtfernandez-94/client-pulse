@@ -1,0 +1,172 @@
+{
+  "schema_version": "1.0",
+  "description": "Single source of truth for client data structure. All UI components and calculations read from this. To add a new field: add it here, and the app adapts.",
+  "fields": {
+    "name": {
+      "type": "string",
+      "required": true,
+      "label": "Client Name",
+      "ui_step": 1
+    },
+    "status": {
+      "type": "enum",
+      "required": true,
+      "options": ["active", "paused", "archived"],
+      "default": "active",
+      "label": "Client Status",
+      "ui_step": 1
+    },
+    "health": {
+      "type": "enum",
+      "required": false,
+      "options": ["✅ Momentum", "🔸 Cruising", "🚩 Attention", "⏸️ Pause"],
+      "label": "Client Health",
+      "ui_step": 1
+    },
+    "payment": {
+      "type": "object",
+      "label": "Payment Details",
+      "ui_step": 2,
+      "fields": {
+        "period": {
+          "type": "enum",
+          "required": true,
+          "options": ["Weekly", "Biweekly", "Monthly", "PIF", "Split PIF (2)"],
+          "label": "Payment Period"
+        },
+        "currency": {
+          "type": "enum",
+          "required": true,
+          "options": ["AUD", "USD", "EUR", "GBP", "CAD"],
+          "label": "Currency"
+        },
+        "amount": {
+          "type": "number",
+          "required": true,
+          "label": "Payment Amount",
+          "note": "Use 0 for PIF already paid"
+        },
+        "gst": {
+          "type": "boolean",
+          "required": true,
+          "default": false,
+          "label": "GST Applies",
+          "note": "10% GST for Australian-domiciled clients"
+        },
+        "processor": {
+          "type": "enum",
+          "required": true,
+          "options": ["Stripe", "Paypal", "Bank Transfer", "Wise"],
+          "label": "Payment Processor"
+        }
+      }
+    },
+    "contract": {
+      "type": "object",
+      "label": "Contract Details",
+      "ui_step": 3,
+      "fields": {
+        "term": {
+          "type": "enum",
+          "required": true,
+          "options": ["12wks", "16wks", "6mth", "12mth"],
+          "label": "Contract Term"
+        },
+        "bonus_term": {
+          "type": "enum",
+          "required": false,
+          "options": ["1mth", "2mth"],
+          "label": "Bonus Term",
+          "note": "1mth = 30 days, 2mth = 61 days"
+        }
+      }
+    },
+    "dates": {
+      "type": "object",
+      "label": "Dates",
+      "ui_step": 4,
+      "fields": {
+        "client_start": {
+          "type": "date",
+          "required": true,
+          "label": "Client Start Date",
+          "note": "When the client first signed up. Never changes."
+        },
+        "program_start": {
+          "type": "date",
+          "required": true,
+          "label": "Current Program Start Date",
+          "note": "Resets when client renews for a new term."
+        },
+        "weeks_paused": {
+          "type": "number",
+          "required": false,
+          "default": 0,
+          "label": "Weeks Paused",
+          "note": "Total weeks paused. Shifts all calculated dates forward."
+        }
+      },
+      "calculated": {
+        "end_of_commitment": "program_start + contract_term_days + bonus_term_days + (weeks_paused * 7)",
+        "renew_contact": "end_of_commitment - 37 days",
+        "review_1": "program_start + 49 days + (weeks_paused * 7) — only if before end_of_commitment",
+        "review_2": "program_start + 105 days + (weeks_paused * 7)",
+        "review_3": "program_start + 161 days + (weeks_paused * 7)",
+        "review_4": "program_start + 217 days + (weeks_paused * 7)",
+        "review_5": "program_start + 273 days + (weeks_paused * 7)",
+        "review_6": "program_start + 329 days + (weeks_paused * 7)"
+      },
+      "term_to_days": {
+        "12wks": 84,
+        "16wks": 112,
+        "6mth": 182,
+        "12mth": 365
+      },
+      "bonus_to_days": {
+        "1mth": 30,
+        "2mth": 61
+      }
+    },
+    "reviews": {
+      "type": "object",
+      "label": "Review Tracking",
+      "note": "Each review has a calculated date and a completed flag with timestamp",
+      "fields": {
+        "review_N": {
+          "date": "calculated from dates.calculated",
+          "completed": "boolean, default false",
+          "completed_date": "date or null",
+          "notes": "string or null"
+        }
+      }
+    },
+    "renewal": {
+      "type": "object",
+      "label": "Renewal Tracking",
+      "fields": {
+        "status": {
+          "type": "enum",
+          "options": ["pending", "actioned", "renewed", "churned"],
+          "default": "pending"
+        },
+        "actioned_date": { "type": "date" },
+        "notes": { "type": "string" }
+      }
+    },
+    "pause_history": {
+      "type": "array",
+      "label": "Pause History",
+      "items": {
+        "paused_date": "date",
+        "resumed_date": "date or null",
+        "weeks": "number",
+        "reason": "string or null"
+      }
+    },
+    "notes": {
+      "type": "string",
+      "required": false,
+      "label": "General Notes"
+    }
+  }
+}
