@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Client Pulse</title>
+  <!-- To run: python3 -m http.server 8080  →  open http://localhost:8080 -->
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen text-gray-900">
+
+  <!-- Header -->
+  <header class="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between sticky top-0 z-10">
+    <div>
+      <h1 class="text-lg font-bold tracking-tight">Client Pulse</h1>
+      <div id="stats" class="text-sm mt-0.5 text-gray-500"></div>
+    </div>
+    <div id="today-display" class="text-sm text-gray-400 font-medium"></div>
+  </header>
+
+  <!-- Controls -->
+  <div class="bg-white border-b border-gray-100 px-6 py-3 flex items-center gap-3 flex-wrap">
+
+    <!-- Status filter -->
+    <div class="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+      <button id="filter-active"   class="filter-btn px-3 py-1 rounded-md text-sm font-medium text-gray-600 transition-all">Active</button>
+      <button id="filter-paused"   class="filter-btn px-3 py-1 rounded-md text-sm font-medium text-gray-600 transition-all">Paused</button>
+      <button id="filter-archived" class="filter-btn px-3 py-1 rounded-md text-sm font-medium text-gray-600 transition-all">Archived</button>
+      <button id="filter-all"      class="filter-btn px-3 py-1 rounded-md text-sm font-medium text-gray-600 transition-all">All</button>
+    </div>
+
+    <!-- Health filter -->
+    <select id="filter-health" class="text-sm border border-gray-200 rounded-lg px-3 py-1.5 text-gray-600 bg-white cursor-pointer">
+      <option value="">All health</option>
+      <option value="✅ Momentum">✅ Momentum</option>
+      <option value="🔸 Cruising">🔸 Cruising</option>
+      <option value="🚩 Attention">🚩 Attention</option>
+      <option value="⏸️ Pause">⏸️ Pause</option>
+    </select>
+
+    <!-- Term filter -->
+    <select id="filter-term" class="text-sm border border-gray-200 rounded-lg px-3 py-1.5 text-gray-600 bg-white cursor-pointer">
+      <option value="">All terms</option>
+      <option value="12wks">12 weeks</option>
+      <option value="16wks">16 weeks</option>
+      <option value="6mth">6 months</option>
+      <option value="12mth">12 months</option>
+    </select>
+
+    <div id="row-count" class="ml-auto text-sm text-gray-400"></div>
+  </div>
+
+  <!-- Table -->
+  <div class="overflow-x-auto">
+    <table class="w-full bg-white text-sm">
+      <thead id="thead"><!-- generated from schema.json --></thead>
+      <tbody id="tbody">
+        <tr>
+          <td colspan="9" class="text-center text-gray-400 py-12">Loading...</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <script src="dateEngine.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
