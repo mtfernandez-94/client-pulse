@@ -1,0 +1,47 @@
+{
+  "description": "Live copy of .claude/settings.json — the actual project permissions. Update both files if you change permissions.",
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(npm install)",
+      "Bash(npm install *)",
+      "Bash(npm test*)",
+      "Bash(node *)",
+      "Bash(npx *)",
+      "Bash(git init*)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(ls *)",
+      "Bash(cat *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(grep *)",
+      "Bash(find *)",
+      "Bash(mkdir *)",
+      "Bash(cp *)",
+      "Bash(mv *)",
+      "Bash(echo *)"
+    ],
+    "deny": [
+      "Bash(rm -rf *)",
+      "Bash(rm *)",
+      "Bash(cat ~/.ssh/*)",
+      "Bash(cat .env*)",
+      "Bash(eval *)",
+      "Bash(source <(*)",
+      "Bash(git push --force*)",
+      "Bash(git push*)",
+      "Bash(npm publish*)",
+      "Bash(npm install -g *)",
+      "Bash(sudo *)",
+      "Bash(curl *)",
+      "Bash(wget *)",
+      "Bash(cat *credentials*)",
+      "Bash(cat *secret*)",
+      "Bash(cat *token*)"
+    ]
+  }
+}

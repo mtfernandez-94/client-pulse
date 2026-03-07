@@ -16,8 +16,23 @@
 
 const REVIEW_OFFSETS = [49, 105, 161, 217, 273, 329]; // days from program_start
 
-const TODAY = new Date();
-TODAY.setHours(0, 0, 0, 0);
+// Returns today at midnight, local time. Called fresh each time so tabs open
+// overnight always use the current date (not a stale value from page load).
+function getToday() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+// Local-timezone ISO string (YYYY-MM-DD). Uses local date, not UTC,
+// so 10 PM in AEST returns today's date, not yesterday's.
+function todayISO() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
 
 // ── Pure date utilities ───────────────────────────────────────────────────────
 
@@ -94,11 +109,16 @@ function calculateReviews(c, termToDays, bonusToDays) {
 }
 
 // Next upcoming review: earliest uncompleted review from today onwards
+// Reviews are generated in ascending order from REVIEW_OFFSETS, so first
+// uncompleted entry is always the next one — no sort needed.
 function nextReview(c, termToDays, bonusToDays) {
-  return calculateReviews(c, termToDays, bonusToDays)
-    .filter(r => !r.completed)
-    .map(r => r.date)
-    .sort((a, b) => a - b)[0] || null;
+  const r = calculateReviews(c, termToDays, bonusToDays).find(r => !r.completed);
+  return r ? r.date : null;
+}
+
+// Same as nextReview but returns { reviewNum, date } so callers know WHICH review
+function nextReviewInfo(c, termToDays, bonusToDays) {
+  return calculateReviews(c, termToDays, bonusToDays).find(r => !r.completed) || null;
 }
 
 // ── Flag calculations ─────────────────────────────────────────────────────────
@@ -107,7 +127,7 @@ function renewalFlag(c, termToDays, bonusToDays) {
   if (c.renewal?.status !== 'pending') return null;
   const rc = renewContact(c, termToDays, bonusToDays);
   if (!rc) return null;
-  const d = daysDiff(TODAY, rc);
+  const d = daysDiff(getToday(), rc);
   if (d < 0)  return 'overdue';
   if (d <= 7) return 'soon';
   return null;
@@ -116,7 +136,7 @@ function renewalFlag(c, termToDays, bonusToDays) {
 function reviewFlag(c, termToDays, bonusToDays) {
   const nr = nextReview(c, termToDays, bonusToDays);
   if (!nr) return null;
-  const d = daysDiff(TODAY, nr);
+  const d = daysDiff(getToday(), nr);
   if (d < 0)  return 'overdue';
   if (d <= 7) return 'soon';
   return null;
@@ -127,7 +147,7 @@ function urgencyScore(c, termToDays, bonusToDays) {
   if (f === 'overdue') return 0;
   if (f === 'soon')    return 1;
   const rc = renewContact(c, termToDays, bonusToDays);
-  if (rc) return 2 + daysDiff(TODAY, rc);
+  if (rc) return 2 + daysDiff(getToday(), rc);
   return 99999;
 }
 

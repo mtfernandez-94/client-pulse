@@ -4,73 +4,160 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Client Pulse</title>
-  <!-- To run: python3 -m http.server 8080  →  open http://localhost:8080 -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      safelist: [
+        'backdrop-blur-sm', 'bg-black/30', 'bg-stone-50/40',
+        'ring-stone-200/50', 'rounded-2xl', 'shadow-2xl', 'tabular-nums',
+        '-translate-x-1/2', 'hover:bg-stone-50/60',
+        'focus:ring-stone-900/10', 'focus:ring-stone-900/20',
+        'text-[9px]', 'text-[10px]', 'text-[11px]', 'text-[12px]', 'text-[13px]',
+        'w-[8px]', 'w-[10px]', 'h-[8px]', 'h-[10px]', 'h-[48px]',
+        'max-h-[65vh]', 'max-h-[90vh]',
+      ],
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'] },
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11'; -webkit-font-smoothing: antialiased; }
+    ::selection { background: rgba(59, 130, 246, 0.15); }
+    table { border-collapse: separate; border-spacing: 0; }
+    .filter-pill { transition: all 0.15s ease; }
+    .filter-pill:hover { background: rgba(0,0,0,0.04); }
+    .filter-pill.active { background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+
+    /* Gantt tooltip dots */
+    .gantt-dot { position: absolute; }
+    .gantt-tooltip {
+      display: none;
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1c1917;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 500;
+      padding: 4px 8px;
+      border-radius: 6px;
+      white-space: nowrap;
+      pointer-events: none;
+      z-index: 50;
+    }
+    .gantt-tooltip::after {
+      content: '';
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      border: 4px solid transparent;
+      border-top-color: #1c1917;
+    }
+    .gantt-dot:hover .gantt-tooltip { display: block; }
+  </style>
 </head>
-<body class="bg-gray-50 min-h-screen text-gray-900">
+<body class="bg-stone-50 min-h-screen text-gray-900 font-sans">
 
-  <!-- Header -->
-  <header class="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between sticky top-0 z-10">
-    <div>
-      <h1 class="text-lg font-bold tracking-tight">Client Pulse</h1>
-      <div id="stats" class="text-sm mt-0.5 text-gray-500"></div>
+  <!-- Login screen (shown when not authenticated) -->
+  <div id="login-screen" class="hidden min-h-screen flex items-center justify-center bg-stone-50">
+    <div class="bg-white rounded-2xl shadow-lg w-full max-w-sm p-8 ring-1 ring-stone-200/50">
+      <h1 class="text-xl font-semibold tracking-tight text-gray-900 mb-1">Client Pulse</h1>
+      <p class="text-[13px] text-stone-400 mb-6">Sign in to manage your clients</p>
+      <div id="auth-error" class="hidden text-red-500 text-[13px] mb-4 rounded-lg"></div>
+      <div class="space-y-3">
+        <input id="auth-email" type="email" placeholder="Email"
+          class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-[13px] focus:ring-2 focus:ring-stone-900/10 focus:border-stone-400 outline-none transition-colors">
+        <input id="auth-password" type="password" placeholder="Password"
+          class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-[13px] focus:ring-2 focus:ring-stone-900/10 focus:border-stone-400 outline-none transition-colors">
+      </div>
+      <button id="btn-sign-in" class="w-full mt-4 px-4 py-2.5 text-[13px] font-semibold text-white bg-gray-900 hover:bg-gray-800 rounded-lg transition-all shadow-sm">Sign In</button>
+      <button id="btn-sign-up" class="w-full mt-2 px-4 py-2.5 text-[13px] font-medium text-stone-600 bg-stone-100 hover:bg-stone-200 rounded-lg transition-all">Create Account</button>
     </div>
-    <div class="flex items-center gap-4">
-      <div id="today-display" class="text-sm text-gray-400 font-medium"></div>
-      <button id="btn-add-client" class="px-4 py-2 text-sm font-medium text-white bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors">+ Add Client</button>
-    </div>
-  </header>
-
-  <!-- Controls -->
-  <div class="bg-white border-b border-gray-100 px-6 py-3 flex items-center gap-3 flex-wrap">
-
-    <!-- Status filter -->
-    <div class="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
-      <button id="filter-active"   class="filter-btn px-3 py-1 rounded-md text-sm font-medium text-gray-600 transition-all">Active</button>
-      <button id="filter-paused"   class="filter-btn px-3 py-1 rounded-md text-sm font-medium text-gray-600 transition-all">Paused</button>
-      <button id="filter-archived" class="filter-btn px-3 py-1 rounded-md text-sm font-medium text-gray-600 transition-all">Archived</button>
-      <button id="filter-all"      class="filter-btn px-3 py-1 rounded-md text-sm font-medium text-gray-600 transition-all">All</button>
-    </div>
-
-    <!-- Health filter -->
-    <select id="filter-health" class="text-sm border border-gray-200 rounded-lg px-3 py-1.5 text-gray-600 bg-white cursor-pointer">
-      <option value="">All health</option>
-      <option value="🆕 Onboarding">🆕 Onboarding</option>
-      <option value="✅ Momentum">✅ Momentum</option>
-      <option value="🔸 Cruising">🔸 Cruising</option>
-      <option value="🚩 Attention">🚩 Attention</option>
-      <option value="⏸️ Pause">⏸️ Pause</option>
-    </select>
-
-    <!-- Term filter -->
-    <select id="filter-term" class="text-sm border border-gray-200 rounded-lg px-3 py-1.5 text-gray-600 bg-white cursor-pointer">
-      <option value="">All terms</option>
-      <option value="12wks">12 weeks</option>
-      <option value="16wks">16 weeks</option>
-      <option value="6mth">6 months</option>
-      <option value="12mth">12 months</option>
-    </select>
-
-    <div id="row-count" class="ml-auto text-sm text-gray-400"></div>
   </div>
 
-  <!-- Table -->
-  <div class="overflow-x-auto">
-    <table class="w-full bg-white text-sm">
-      <thead id="thead"><!-- generated from schema.json --></thead>
-      <tbody id="tbody">
-        <tr>
-          <td colspan="9" class="text-center text-gray-400 py-12">Loading...</td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
+  <!-- App (shown when authenticated) -->
+  <div id="app-container" class="hidden">
 
-  <!-- Modal container -->
-  <div id="add-client-modal" class="hidden"></div>
+    <!-- Header -->
+    <header class="bg-white/80 backdrop-blur-xl border-b border-stone-200/60 px-8 py-5 flex items-center justify-between sticky top-0 z-10">
+      <div>
+        <h1 class="text-xl font-semibold tracking-tight text-gray-900">Client Pulse</h1>
+        <div id="stats" class="text-[13px] mt-1 text-stone-400 font-medium tracking-wide"></div>
+      </div>
+      <div class="flex items-center gap-5">
+        <div id="today-display" class="text-[13px] text-stone-400 font-medium tracking-wide"></div>
+        <button id="btn-export-csv" class="px-4 py-2 text-[13px] font-medium text-stone-600 bg-stone-100 hover:bg-stone-200 rounded-lg transition-all">Export CSV</button>
+        <button id="btn-add-client" class="px-4 py-2 text-[13px] font-semibold text-white bg-gray-900 hover:bg-gray-800 rounded-lg transition-all shadow-sm hover:shadow">+ Add Client</button>
+        <button id="btn-sign-out" class="px-4 py-2 text-[13px] font-medium text-stone-400 hover:text-stone-600 transition-colors">Sign Out</button>
+      </div>
+    </header>
 
-  <script src="dateEngine.js"></script>
-  <script src="addClient.js"></script>
-  <script src="app.js"></script>
+    <!-- Controls -->
+    <div class="bg-white/60 backdrop-blur-sm border-b border-stone-100 px-8 py-3 flex items-center gap-4 flex-wrap">
+
+      <!-- Status filter -->
+      <div class="flex items-center gap-0.5 bg-stone-100/80 rounded-lg p-0.5">
+        <button id="filter-active"   class="filter-pill px-3.5 py-1.5 rounded-md text-[13px] font-medium text-stone-500">Active</button>
+        <button id="filter-paused"   class="filter-pill px-3.5 py-1.5 rounded-md text-[13px] font-medium text-stone-500">Paused</button>
+        <button id="filter-archived" class="filter-pill px-3.5 py-1.5 rounded-md text-[13px] font-medium text-stone-500">Archived</button>
+        <button id="filter-all"      class="filter-pill px-3.5 py-1.5 rounded-md text-[13px] font-medium text-stone-500">All</button>
+      </div>
+
+      <!-- Health filter -->
+      <select id="filter-health" class="text-[13px] border border-stone-200 rounded-lg px-3 py-1.5 text-stone-500 bg-white/80 cursor-pointer focus:ring-1 focus:ring-stone-300 focus:border-stone-300 outline-none">
+        <option value="">All health</option>
+        <!-- populated from schema in init() -->
+      </select>
+
+      <!-- Term filter -->
+      <select id="filter-term" class="text-[13px] border border-stone-200 rounded-lg px-3 py-1.5 text-stone-500 bg-white/80 cursor-pointer focus:ring-1 focus:ring-stone-300 focus:border-stone-300 outline-none">
+        <option value="">All terms</option>
+        <!-- populated from schema in init() -->
+      </select>
+
+      <!-- View toggle -->
+      <div class="flex items-center gap-0.5 bg-stone-100/80 rounded-lg p-0.5">
+        <button id="view-table" class="filter-pill px-3.5 py-1.5 rounded-md text-[13px] font-medium text-stone-500">Table</button>
+        <button id="view-gantt" class="filter-pill px-3.5 py-1.5 rounded-md text-[13px] font-medium text-stone-500">Gantt</button>
+      </div>
+      <div id="row-count" class="ml-auto text-[13px] text-stone-400 font-medium"></div>
+    </div>
+
+    <!-- Table view -->
+    <div id="table-wrap" class="px-8 pt-1">
+      <table class="w-full text-[13px]">
+        <thead id="thead"></thead>
+        <tbody id="tbody">
+          <tr>
+            <td colspan="99" class="text-center text-stone-400 py-16 text-sm">Loading...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Gantt view -->
+    <div id="gantt-wrap" class="hidden">
+      <div id="gantt-inner" class="min-w-full"></div>
+    </div>
+
+    <!-- Modal container -->
+    <div id="add-client-modal" class="hidden"></div>
+
+  </div><!-- /app-container -->
+
+  <!-- Scripts: Supabase CDN first, then app modules -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase.js?v=1"></script>
+  <script src="dateEngine.js?v=3"></script>
+  <script src="addClient.js?v=3"></script>
+  <script src="gantt.js?v=3"></script>
+  <script src="app.js?v=3"></script>
 </body>
 </html>

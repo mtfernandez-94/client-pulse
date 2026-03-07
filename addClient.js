@@ -5,17 +5,17 @@
 // Auto-assigns: status = "active", health = "🆕 Onboarding"
 // Fields: Name, Contract (term + bonus), Payment (all), Dates (client_start + program_start)
 
-let addClientSchema = null;
+// Uses global schemaCache from app.js (set during init)
 
 // ── Form field builder ───────────────────────────────────────────────────────
 
 function buildField(id, def) {
   const label = def.label || id;
-  const note  = def.note ? `<p class="text-xs text-gray-400 mt-1">${def.note}</p>` : '';
-  const req   = def.required ? '<span class="text-red-400 ml-0.5">*</span>' : '';
+  const note  = def.note ? `<p class="text-[11px] text-stone-400 mt-1">${def.note}</p>` : '';
+  const req   = def.required ? '<span class="text-rose-400 ml-0.5">*</span>' : '';
 
   let input = '';
-  const inputCls = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none';
+  const inputCls = 'w-full border border-stone-200 rounded-lg px-3 py-2.5 text-[13px] text-gray-900 focus:ring-2 focus:ring-stone-900/10 focus:border-stone-400 outline-none transition-colors bg-white placeholder-stone-400';
 
   switch (def.type) {
     case 'string':
@@ -38,8 +38,8 @@ function buildField(id, def) {
     case 'boolean':
       return `
         <div class="flex items-center gap-3 py-2">
-          <input type="checkbox" id="${id}" class="w-4 h-4 rounded border-gray-300 text-blue-500 focus:ring-blue-400" ${def.default ? 'checked' : ''}>
-          <label for="${id}" class="text-sm font-medium text-gray-700">${label}${req}</label>
+          <input type="checkbox" id="${id}" class="w-4 h-4 rounded border-stone-300 text-gray-900 focus:ring-stone-900/20" ${def.default ? 'checked' : ''}>
+          <label for="${id}" class="text-[13px] font-medium text-stone-600">${label}${req}</label>
           ${note}
         </div>`;
     default:
@@ -48,57 +48,49 @@ function buildField(id, def) {
 
   return `
     <div>
-      <label for="${id}" class="block text-sm font-medium text-gray-700 mb-1">${label}${req}</label>
+      <label for="${id}" class="block text-[12px] font-medium text-stone-500 mb-1">${label}${req}</label>
       ${input}
       ${note}
     </div>`;
 }
 
-function todayISO() {
-  const d = new Date();
-  return d.toISOString().slice(0, 10);
-}
+// todayISO() is defined in dateEngine.js (loaded before this file)
 
 // ── Render modal ─────────────────────────────────────────────────────────────
 
 function renderAddModal() {
-  const f = addClientSchema.fields;
+  const f = schemaCache.fields;
   const modal = document.getElementById('add-client-modal');
 
   modal.innerHTML = `
-    <div class="fixed inset-0 bg-black/40 z-40" onclick="closeModal()"></div>
+    <div class="fixed inset-0 bg-black/30 backdrop-blur-sm z-40" onclick="closeModal()"></div>
     <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-hidden">
+      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden ring-1 ring-stone-200/50">
 
-        <!-- Header -->
-        <div class="px-6 pt-5 pb-4 border-b border-gray-100 flex items-center justify-between">
-          <h2 class="text-lg font-bold text-gray-900">Add New Client</h2>
-          <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+        <div class="px-6 pt-6 pb-4 flex items-center justify-between">
+          <h2 class="text-base font-semibold text-gray-900">Add New Client</h2>
+          <button onclick="closeModal()" class="text-stone-400 hover:text-stone-600 text-lg leading-none transition-colors">&times;</button>
         </div>
 
-        <!-- Body -->
-        <div class="px-6 py-5 overflow-y-auto max-h-[65vh] space-y-6">
+        <div class="px-6 py-4 overflow-y-auto max-h-[65vh] space-y-6">
 
-          <!-- Name -->
           <div>
-            <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Client</h3>
+            <h3 class="text-[11px] font-semibold text-stone-400 uppercase tracking-widest mb-3">Client</h3>
             <div class="space-y-3">
               ${buildField('add-name', f.name)}
             </div>
           </div>
 
-          <!-- Contract -->
           <div>
-            <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Contract</h3>
+            <h3 class="text-[11px] font-semibold text-stone-400 uppercase tracking-widest mb-3">Contract</h3>
             <div class="grid grid-cols-2 gap-3">
               ${buildField('add-term', f.contract.fields.term)}
               ${buildField('add-bonus', f.contract.fields.bonus_term)}
             </div>
           </div>
 
-          <!-- Payment -->
           <div>
-            <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Payment</h3>
+            <h3 class="text-[11px] font-semibold text-stone-400 uppercase tracking-widest mb-3">Payment</h3>
             <div class="grid grid-cols-2 gap-3">
               ${buildField('add-period', f.payment.fields.period)}
               ${buildField('add-processor', f.payment.fields.processor)}
@@ -110,9 +102,8 @@ function renderAddModal() {
             </div>
           </div>
 
-          <!-- Dates -->
           <div>
-            <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Dates</h3>
+            <h3 class="text-[11px] font-semibold text-stone-400 uppercase tracking-widest mb-3">Dates</h3>
             <div class="grid grid-cols-2 gap-3">
               ${buildField('add-client-start', f.dates.fields.client_start)}
               ${buildField('add-program-start', f.dates.fields.program_start)}
@@ -122,10 +113,9 @@ function renderAddModal() {
           <div id="add-error" class="text-red-500 text-sm hidden"></div>
         </div>
 
-        <!-- Footer -->
-        <div class="px-6 py-4 border-t border-gray-100 flex justify-end">
-          <button onclick="submitNewClient()" class="px-5 py-2 text-sm font-medium text-white bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors">
-            Add Client ✓
+        <div class="px-6 py-4 border-t border-stone-100 flex justify-end">
+          <button onclick="submitNewClient()" class="px-5 py-2 text-[13px] font-semibold text-white bg-gray-900 hover:bg-gray-800 rounded-lg transition-all shadow-sm">
+            Add Client
           </button>
         </div>
 
@@ -166,7 +156,7 @@ function validateAddForm() {
 
 // ── Submit ────────────────────────────────────────────────────────────────────
 
-function submitNewClient() {
+async function submitNewClient() {
   if (!validateAddForm()) return;
 
   const val = id => document.getElementById(id)?.value || '';
@@ -199,8 +189,16 @@ function submitNewClient() {
     notes:         '',
   };
 
-  allClients.push(client);
-  localStorage.setItem('clientPulse_clients', JSON.stringify(allClients));
+  try {
+    const session = await sbGetSession();
+    if (!session) { alert('Not signed in.'); return; }
+    const saved = await sbInsertClient(client, session.user.id);
+    allClients.push(saved); // push version with Supabase-generated id
+  } catch (e) {
+    console.error('Could not save new client:', e);
+    alert('Error saving client. Check your connection and try again.');
+    return;
+  }
 
   closeModal();
   render();
@@ -209,8 +207,7 @@ function submitNewClient() {
 
 // ── Open / close ─────────────────────────────────────────────────────────────
 
-function openAddClientModal(schema) {
-  addClientSchema = schema;
+function openAddClientModal() {
   const modal = document.getElementById('add-client-modal');
   modal.classList.remove('hidden');
   renderAddModal();

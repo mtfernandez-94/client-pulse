@@ -4,13 +4,15 @@
   "table_columns": [
     { "key": "name",                   "label": "Name",               "cell_type": "name",         "sortable": true,  "sort_key": "name" },
     { "key": "health",                 "label": "Health",             "cell_type": "health_badge", "sortable": true,  "sort_key": "health" },
-    { "key": "status",                 "label": "Status",             "cell_type": "status_badge" },
-    { "key": "contract.term",          "label": "Term",               "cell_type": "text" },
-    { "key": "payment",                "label": "Payment",            "cell_type": "payment" },
-    { "key": "dates.program_start",    "label": "Program Start",      "cell_type": "date" },
+    { "key": "status",                 "label": "Status",             "cell_type": "status_badge", "sortable": true,  "sort_key": "status" },
+    { "key": "contract.term",          "label": "Term",               "cell_type": "text",         "sortable": true,  "sort_key": "term" },
+    { "key": "payment",                "label": "Payment",            "cell_type": "payment",      "sortable": true,  "sort_key": "paymentAmount" },
+    { "key": "payment.processor",      "label": "Processor",           "cell_type": "text",         "sortable": true,  "sort_key": "processor" },
+    { "key": "payment.period",         "label": "Period",              "cell_type": "text",         "sortable": true,  "sort_key": "paymentPeriod" },
+    { "key": "dates.program_start",    "label": "Program Start",      "cell_type": "date",         "sortable": true,  "sort_key": "programStart" },
     { "key": "calc.end_of_commitment", "label": "End of Commitment",  "cell_type": "calc_date",    "sortable": true,  "sort_key": "endDate" },
     { "key": "calc.renew_contact",     "label": "Renew Contact",      "cell_type": "renewal_flag", "sortable": true,  "sort_key": "renewalUrgency" },
-    { "key": "calc.next_review",       "label": "Next Review",        "cell_type": "review_flag" }
+    { "key": "calc.next_review",       "label": "Next Review",        "cell_type": "review_flag",  "sortable": true,  "sort_key": "nextReview" }
   ],
   "fields": {
     "name": {
@@ -158,7 +160,7 @@
       "fields": {
         "status": {
           "type": "enum",
-          "options": ["pending", "actioned", "renewed", "churned"],
+          "options": ["pending", "renewed", "churned", "paused"],
           "default": "pending"
         },
         "actioned_date": { "type": "date" },
@@ -172,7 +174,8 @@
         "paused_date": "date",
         "resumed_date": "date or null",
         "weeks": "number",
-        "reason": "string or null"
+        "reason": "string or null",
+        "health_before_pause": "string or null"
       }
     },
     "notes": {

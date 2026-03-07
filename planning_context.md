@@ -24,7 +24,6 @@ This file captures the key decisions from the planning conversation so Claude Co
 ### Teaching approach
 - Pause after each concept, quiz the student, hold them to a high bar
 - Build first, label the concept second
-- Use coaching analogies (progressions, periodisation, protocols)
 - Claude Code acts as both teacher and code agent in the same session
 
 ### Student preferences
@@ -41,6 +40,16 @@ This file captures the key decisions from the planning conversation so Claude Co
 - VA handles 50 Instagram DM conversations/day
 - Uses EverFit for programme delivery, Stripe for payments
 - Australian domiciled (GST applies to AU clients at 10%)
+
+## Backlog / future features (to add at the end)
+- **Sort by all columns:** Done — every column is sortable.
+- **Payment sorting:** Done — Payment column sorts by currency then amount (asc/desc); Period column sorts by payment type (PIF, Weekly, Biweekly, Monthly, Split PIF).
+- **Payment processor column:** Added as "Processor" column (schema-driven; sortable).
+
+## Sprint 7–8 notes (for teaching)
+- **Gantt:** Custom CSS timeline (no external library). Table/Gantt toggle; bars colour-coded by health; today line; markers for renew contact and reviews; click bar opens client.
+- **Archive/Reactivate:** Archive = status → archived (data preserved). Reactivate = new program_start (+ optional term) → status active, health Onboarding, renewal pending.
+- **MCP (conceptual):** Standard protocol to connect external tools (e.g. Stripe, EverFit). Would enable payment verification or programme delivery sync without building custom integrations.
 
 ## Files in this project
 | File | Purpose |
