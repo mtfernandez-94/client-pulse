@@ -20,19 +20,19 @@ let viewMode = 'table'; // 'table' | 'gantt'
 // schema loads. Declared here so they're accessible throughout the file.
 
 const HEALTH_STYLES_BY_INDEX = [
-  { badge: 'bg-sky-50 text-sky-700 ring-1 ring-sky-200/60',       gantt: { bg: '#e0f2fe', border: '#7dd3fc', text: '#0369a1' } },
-  { badge: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200/60', gantt: { bg: '#d1fae5', border: '#6ee7b7', text: '#047857' } },
-  { badge: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200/60', gantt: { bg: '#fef3c7', border: '#fcd34d', text: '#b45309' } },
-  { badge: 'bg-rose-50 text-rose-700 ring-1 ring-rose-200/60',    gantt: { bg: '#ffe4e6', border: '#fda4af', text: '#be123c' } },
-  { badge: 'bg-stone-50 text-stone-500 ring-1 ring-stone-200/60', gantt: { bg: '#f5f5f4', border: '#d6d3d1', text: '#78716c' } },
+  { badge: 'bg-blue-500/10 text-blue-400 ring-1 ring-blue-500/20',     gantt: { bg: '#0c1e3a', border: '#2563eb', text: '#60a5fa' } },
+  { badge: 'bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20', gantt: { bg: '#052e16', border: '#16a34a', text: '#4ade80' } },
+  { badge: 'bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/20',  gantt: { bg: '#2a1f04', border: '#d97706', text: '#fbbf24' } },
+  { badge: 'bg-rose-500/10 text-rose-400 ring-1 ring-rose-500/20',     gantt: { bg: '#2a0a0a', border: '#dc2626', text: '#f87171' } },
+  { badge: 'bg-white/[0.05] text-[#8892a8] ring-1 ring-white/[0.08]', gantt: { bg: '#111520', border: '#4b5563', text: '#9ca3af' } },
 ];
 
 let HEALTH_ORDER = {};
 let HEALTH_STYLE = {};
 const STATUS_STYLE = {
-  active:   'bg-emerald-50 text-emerald-600 ring-1 ring-emerald-200/60',
-  paused:   'bg-amber-50 text-amber-600 ring-1 ring-amber-200/60',
-  archived: 'bg-stone-50 text-stone-500 ring-1 ring-stone-200/60',
+  active:   'bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20',
+  paused:   'bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/20',
+  archived: 'bg-white/[0.05] text-[#64748b] ring-1 ring-white/[0.06]',
 };
 
 // ── Calculated field dispatch ─────────────────────────────────────────────────
@@ -112,53 +112,53 @@ function getPath(obj, path) {
 // ── Rendering helpers ─────────────────────────────────────────────────────────
 
 function healthBadge(h) {
-  if (!h) return '<span class="text-stone-300">—</span>';
-  const cls = HEALTH_STYLE[h] || 'bg-stone-50 text-stone-500';
+  if (!h) return '<span class="text-[#4a5568]">—</span>';
+  const cls = HEALTH_STYLE[h] || 'bg-white/[0.05] text-[#64748b]';
   return `<span class="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium ${cls}">${h}</span>`;
 }
 
 function statusBadge(s) {
-  const cls = STATUS_STYLE[s] || 'bg-stone-50 text-stone-500';
+  const cls = STATUS_STYLE[s] || 'bg-white/[0.05] text-[#64748b]';
   return `<span class="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium capitalize ${cls}">${s}</span>`;
 }
 
 function flagBadge(type) {
   if (!type) return '';
-  if (type === 'overdue') return ' <span class="text-[11px] font-semibold text-rose-600 ml-1.5">Overdue</span>';
-  return ' <span class="text-[11px] font-semibold text-amber-600 ml-1.5">This week</span>';
+  if (type === 'overdue') return ' <span class="text-[11px] font-semibold text-rose-400 ml-1.5">Overdue</span>';
+  return ' <span class="text-[11px] font-semibold text-amber-400 ml-1.5">This week</span>';
 }
 
 function paymentCell(c) {
   const p = c.payment;
-  if (!p) return '<span class="text-stone-300">—</span>';
+  if (!p) return '<span class="text-[#4a5568]">—</span>';
   const cur = p.currency;
   const amt = p.amount;
-  if (!cur || typeof cur !== 'string' || cur.length > 4) return '<span class="text-stone-300">—</span>';
-  if (amt === 'paid') return `<span class="text-stone-600">${cur} PIF <span class="text-stone-400">✓</span></span>`;
-  if (typeof amt !== 'number') return '<span class="text-stone-300">—</span>';
-  const gst = p.gst ? '<span class="text-stone-400 ml-0.5">+GST</span>' : '';
-  return `<span class="tabular-nums">${cur} ${amt.toLocaleString('en-AU')}</span>${gst}`;
+  if (!cur || typeof cur !== 'string' || cur.length > 4) return '<span class="text-[#4a5568]">—</span>';
+  if (amt === 'paid') return `<span class="text-[#8892a8]">${cur} PIF <span class="text-emerald-400">✓</span></span>`;
+  if (typeof amt !== 'number') return '<span class="text-[#4a5568]">—</span>';
+  const gst = p.gst ? '<span class="text-[#4a5568] ml-0.5">+GST</span>' : '';
+  return `<span class="tabular-nums font-mono">${cur} ${amt.toLocaleString('en-AU')}</span>${gst}`;
 }
 
 // ── Cell renderer ─────────────────────────────────────────────────────────────
 
 const TD = 'px-5 py-3.5 whitespace-nowrap';
-const TD_MUTED = `${TD} text-stone-500`;
+const TD_MUTED = `${TD} text-[#64748b] font-mono text-[12px]`;
 
 function renderCell(client, col) {
   const idx = client._idx;
 
   switch (col.cell_type) {
     case 'name':
-      return `<td class="${TD} font-medium text-gray-900">
-        <span class="cursor-pointer hover:text-blue-600 transition-colors" onclick="openEditModal(${idx})">${client.name}</span>
+      return `<td class="${TD} font-medium text-white">
+        <span class="cursor-pointer hover:text-indigo-400 transition-colors" onclick="openEditModal(${idx})">${client.name}</span>
       </td>`;
 
     case 'health_badge': {
       const options = schemaCache?.fields?.health?.options || [];
       const opts = options.map(o => `<option value="${o}" ${o === client._health ? 'selected' : ''}>${o}</option>`).join('');
       return `<td class="${TD}">
-        <select onchange="updateHealth(${idx}, this.value)" class="appearance-none bg-transparent border-0 cursor-pointer text-[11px] font-medium focus:ring-0 p-0 text-stone-700">
+        <select onchange="updateHealth(${idx}, this.value)" class="appearance-none bg-transparent border-0 cursor-pointer text-[11px] font-medium focus:ring-0 p-0 text-[#e2e8f0]">
           ${opts}
         </select>
       </td>`;
@@ -188,8 +188,8 @@ function renderCell(client, col) {
     case 'renewal_flag': {
       const rc = renewContact(client, termToDays, bonusToDays);
       const rf = renewalFlag(client, termToDays, bonusToDays);
-      const cls = rf ? 'font-medium text-gray-900' : 'text-stone-500';
-      const clickable = rf && client.renewal?.status === 'pending' ? ` onclick="openRenewalModal(${idx})" class="cursor-pointer hover:bg-stone-50 rounded-md transition-colors"` : '';
+      const cls = rf ? 'font-medium text-white font-mono text-[12px]' : 'text-[#64748b] font-mono text-[12px]';
+      const clickable = rf && client.renewal?.status === 'pending' ? ` onclick="openRenewalModal(${idx})" class="cursor-pointer hover:bg-white/[0.04] rounded-md transition-colors"` : '';
       return `<td class="${TD}"${clickable}><span class="${cls}">${fmt(rc)}</span>${flagBadge(rf)}</td>`;
     }
 
@@ -197,8 +197,8 @@ function renderCell(client, col) {
       const nri = nextReviewInfo(client, termToDays, bonusToDays);
       const nr  = nri ? nri.date : null;
       const rvf = reviewFlag(client, termToDays, bonusToDays);
-      const cls = rvf ? 'font-medium text-gray-900' : 'text-stone-500';
-      const clickable = nri && rvf ? ` onclick="openReviewModal(${idx}, ${nri.reviewNum})" class="cursor-pointer hover:bg-stone-50 rounded-md transition-colors"` : '';
+      const cls = rvf ? 'font-medium text-white font-mono text-[12px]' : 'text-[#64748b] font-mono text-[12px]';
+      const clickable = nri && rvf ? ` onclick="openReviewModal(${idx}, ${nri.reviewNum})" class="cursor-pointer hover:bg-white/[0.04] rounded-md transition-colors"` : '';
       return `<td class="${TD}"${clickable}><span class="${cls}">${fmt(nr)}</span>${flagBadge(rvf)}</td>`;
     }
 
@@ -215,10 +215,10 @@ function updateSortIcons() {
     if (!icon) return;
     if (th.dataset.sort === sortCol) {
       icon.textContent = sortDir === 'asc' ? '↑' : '↓';
-      icon.className   = 'sort-icon text-stone-900 ml-0.5';
+      icon.className   = 'sort-icon text-indigo-400 ml-0.5';
     } else {
       icon.textContent = '↕';
-      icon.className   = 'sort-icon text-stone-300 ml-0.5';
+      icon.className   = 'sort-icon text-[#2d3748] ml-0.5';
     }
   });
 }
@@ -230,11 +230,11 @@ function updateFilterButtons() {
     const btn = document.getElementById(`filter-${s}`);
     if (!btn) return;
     if (s === filterStatus) {
-      btn.classList.add('active', 'text-gray-900');
-      btn.classList.remove('text-stone-500');
+      btn.classList.add('active');
+      btn.classList.remove('text-[#64748b]');
     } else {
-      btn.classList.remove('active', 'text-gray-900');
-      btn.classList.add('text-stone-500');
+      btn.classList.remove('active');
+      btn.classList.add('text-[#64748b]');
     }
   });
 }
@@ -243,15 +243,15 @@ function updateFilterButtons() {
 
 function renderHeaders() {
   const thead = document.getElementById('thead');
-  thead.innerHTML = '<tr class="border-b border-stone-200 text-[11px] font-semibold text-stone-400 uppercase tracking-widest">' +
+  thead.innerHTML = '<tr class="border-b border-white/[0.06] text-[11px] font-semibold text-[#4a5568] uppercase tracking-widest font-mono">' +
     tableColumns.map(col => {
       if (!col.sortable) {
         return `<th class="px-5 py-3 text-left whitespace-nowrap font-semibold">${col.label}</th>`;
       }
       const icon = col.sort_key === sortCol
-        ? `<span class="sort-icon text-stone-900 ml-0.5">${sortDir === 'asc' ? '↑' : '↓'}</span>`
-        : `<span class="sort-icon text-stone-300 ml-0.5">↕</span>`;
-      return `<th class="sort-header px-5 py-3 text-left cursor-pointer select-none whitespace-nowrap font-semibold hover:text-stone-600 transition-colors" data-sort="${col.sort_key}">
+        ? `<span class="sort-icon text-indigo-400 ml-0.5">${sortDir === 'asc' ? '↑' : '↓'}</span>`
+        : `<span class="sort-icon text-[#2d3748] ml-0.5">↕</span>`;
+      return `<th class="sort-header px-5 py-3 text-left cursor-pointer select-none whitespace-nowrap font-semibold hover:text-[#8892a8] transition-colors" data-sort="${col.sort_key}">
         ${col.label}${icon}
       </th>`;
     }).join('') +
@@ -290,30 +290,67 @@ function render() {
   const tbody = document.getElementById('tbody');
 
   if (clients.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="${colspan}" class="text-center text-gray-400 py-12">No clients match this filter.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="${colspan}" class="text-center text-[#4a5568] py-12 font-mono">No clients match this filter.</td></tr>`;
     return;
   }
 
-  tbody.innerHTML = clients.map(c =>
-    `<tr class="border-b border-stone-100 hover:bg-stone-50/60 transition-colors">
+  tbody.innerHTML = clients.map(c => {
+    const hColors = GANTT_BAR_COLOR[c._health] || GANTT_DEFAULT_COLOR;
+    return `<tr class="border-b border-white/[0.04] transition-all" style="box-shadow:inset 3px 0 0 ${hColors.border};">
       ${tableColumns.map(col => renderCell(c, col)).join('')}
-    </tr>`
-  ).join('');
+    </tr>`;
+  }).join('');
 }
 
 // ── Gantt view ───────────────────────────────────────────────────────────────
 // Moved to gantt.js (ClickUp-style with scroll, zoom, and hover tooltips)
 
-// ── Stats bar ─────────────────────────────────────────────────────────────────
+// ── Stats bar — 3D KPI cards + health distribution bar ────────────────────────
+
+function kpiCard(value, label, color, bgColor) {
+  return `<div class="kpi-card" style="--kpi-color:${color};--kpi-bg:${bgColor};">
+    <div class="kpi-value font-mono">${value}</div>
+    <div class="kpi-label">${label}</div>
+  </div>`;
+}
 
 function renderStats() {
-  const count = s => allClients.filter(c => c.status === s).length;
-  document.getElementById('stats').innerHTML =
-    `<span class="text-emerald-600">${count('active')} active</span>` +
-    `<span class="text-stone-300 mx-2">·</span>` +
-    `<span class="text-amber-600">${count('paused')} paused</span>` +
-    `<span class="text-stone-300 mx-2">·</span>` +
-    `<span class="text-stone-400">${count('archived')} archived</span>`;
+  const total = allClients.length;
+  const activeClients = allClients.filter(c => c.status === 'active');
+  const active = activeClients.length;
+  const paused = allClients.filter(c => c.status === 'paused').length;
+  const archived = allClients.filter(c => c.status === 'archived').length;
+
+  // Urgency counts
+  const renewalsDue = activeClients.filter(c => renewalFlag(c, termToDays, bonusToDays)).length;
+  const reviewsDue = activeClients.filter(c => reviewFlag(c, termToDays, bonusToDays)).length;
+
+  // Health distribution bar
+  const healthOptions = schemaCache?.fields?.health?.options || [];
+  const healthCounts = {};
+  activeClients.forEach(c => {
+    const h = normaliseHealth(c.health);
+    healthCounts[h] = (healthCounts[h] || 0) + 1;
+  });
+  const barSegments = healthOptions.map(h => {
+    const count = healthCounts[h] || 0;
+    const pct = active > 0 ? (count / active) * 100 : 0;
+    const colors = GANTT_BAR_COLOR[h] || GANTT_DEFAULT_COLOR;
+    if (pct <= 0) return '';
+    return `<div class="health-bar-segment rounded-sm" style="width:${pct}%;background:${colors.border};box-shadow:0 0 8px ${colors.border}40;" title="${h}: ${count}"></div>`;
+  }).join('');
+
+  document.getElementById('stats').innerHTML = `
+    <div class="grid grid-cols-3 sm:grid-cols-6 gap-3 mb-4">
+      ${kpiCard(total, 'Total Clients', '#818cf8', 'rgba(129,140,248,0.15)')}
+      ${kpiCard(active, 'Active', '#34d399', 'rgba(52,211,153,0.15)')}
+      ${kpiCard(paused, 'Paused', '#fbbf24', 'rgba(251,191,36,0.15)')}
+      ${kpiCard(archived, 'Archived', '#64748b', 'rgba(100,116,139,0.1)')}
+      ${kpiCard(renewalsDue, 'Renewals Due', renewalsDue > 0 ? '#f87171' : '#64748b', renewalsDue > 0 ? 'rgba(248,113,113,0.15)' : 'rgba(100,116,139,0.1)')}
+      ${kpiCard(reviewsDue, 'Reviews Due', reviewsDue > 0 ? '#fbbf24' : '#64748b', reviewsDue > 0 ? 'rgba(251,191,36,0.15)' : 'rgba(100,116,139,0.1)')}
+    </div>
+    ${active > 0 ? `<div class="flex h-1.5 rounded-full overflow-hidden gap-0.5">${barSegments}</div>` : ''}
+  `;
 
   document.getElementById('today-display').textContent =
     getToday().toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
@@ -442,11 +479,11 @@ function updateViewToggle() {
     if (!btn) return;
     const isTable = id === 'view-table';
     if ((isTable && viewMode === 'table') || (!isTable && viewMode === 'gantt')) {
-      btn.classList.add('active', 'text-gray-900');
-      btn.classList.remove('text-stone-500');
+      btn.classList.add('active');
+      btn.classList.remove('text-[#64748b]');
     } else {
-      btn.classList.remove('active', 'text-gray-900');
-      btn.classList.add('text-stone-500');
+      btn.classList.remove('active');
+      btn.classList.add('text-[#64748b]');
     }
   });
 }
@@ -509,32 +546,32 @@ function openReviewModal(idx, reviewNum) {
 
   const modal = document.getElementById('add-client-modal');
   if (!modal) return;
-  const inputCls = 'w-full border border-stone-200 rounded-lg px-3 py-2.5 text-[13px] text-gray-900 focus:ring-2 focus:ring-stone-900/10 focus:border-stone-400 outline-none transition-colors bg-white';
+  const inputCls = 'input-dark w-full bg-[#0a0d13] border border-white/[0.08] rounded-lg px-3 py-2.5 text-[13px] text-[#e2e8f0] focus:outline-none transition-all placeholder-[#4a5568]';
   const reviewDate = fmt(review.date);
   const overdue = review.date < getToday();
 
   modal.classList.remove('hidden');
   modal.innerHTML = `
-    <div class="fixed inset-0 bg-black/30 backdrop-blur-sm z-40" onclick="closeModal()"></div>
+    <div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" onclick="closeModal()"></div>
     <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg ring-1 ring-stone-200/50">
+      <div class="modal-panel rounded-2xl w-full max-w-lg border border-white/[0.06]">
         <div class="px-6 pt-6 pb-4 flex items-center justify-between">
-          <h2 class="text-base font-semibold text-gray-900">Review ${reviewNum}: ${client.name}</h2>
-          <button type="button" onclick="closeModal()" class="text-stone-400 hover:text-stone-600 text-lg leading-none transition-colors">&times;</button>
+          <h2 class="text-base font-semibold text-white">Review ${reviewNum}: ${client.name}</h2>
+          <button type="button" onclick="closeModal()" class="text-[#4a5568] hover:text-[#8892a8] text-lg leading-none transition-colors">&times;</button>
         </div>
         <div class="px-6 py-5 space-y-4">
           <div class="flex items-center gap-3 text-[13px]">
-            <span class="text-stone-500">Due date:</span>
-            <span class="${overdue ? 'font-semibold text-rose-600' : 'text-gray-900'}">${reviewDate}${overdue ? ' (overdue)' : ''}</span>
+            <span class="text-[#64748b]">Due date:</span>
+            <span class="${overdue ? 'font-semibold text-rose-400' : 'text-white'} font-mono">${reviewDate}${overdue ? ' (overdue)' : ''}</span>
           </div>
           <div>
-            <label class="block text-[12px] font-medium text-stone-500 mb-1">Notes (optional)</label>
+            <label class="block text-[12px] font-medium text-[#64748b] mb-1">Notes (optional)</label>
             <textarea id="review-notes" class="${inputCls}" rows="3" placeholder="e.g. Progressing well, increase difficulty next block"></textarea>
           </div>
         </div>
-        <div class="px-6 py-4 border-t border-stone-100 flex justify-end gap-2">
-          <button type="button" onclick="closeModal()" class="px-3.5 py-2 text-[13px] font-medium text-stone-500 hover:text-stone-700 transition-colors">Cancel</button>
-          <button type="button" onclick="submitReview(${idx}, ${reviewNum})" class="px-5 py-2 text-[13px] font-semibold text-white bg-gray-900 hover:bg-gray-800 rounded-lg transition-all shadow-sm">Mark complete</button>
+        <div class="px-6 py-4 border-t border-white/[0.06] flex justify-end gap-2">
+          <button type="button" onclick="closeModal()" class="px-3.5 py-2 text-[13px] font-medium text-[#64748b] hover:text-[#e2e8f0] transition-colors">Cancel</button>
+          <button type="button" onclick="submitReview(${idx}, ${reviewNum})" class="px-5 py-2 btn-primary text-[13px] font-semibold text-white rounded-lg">Mark complete</button>
         </div>
       </div>
     </div>`;
@@ -567,40 +604,40 @@ function openEditModal(idx) {
   modal.classList.remove('hidden');
 
   const reviewsList = calculateReviews(client, termToDays, bonusToDays);
-  const inputCls = 'w-full border border-stone-200 rounded-lg px-3 py-2.5 text-[13px] text-gray-900 focus:ring-2 focus:ring-stone-900/10 focus:border-stone-400 outline-none transition-colors bg-white placeholder-stone-400';
+  const inputCls = 'input-dark w-full bg-[#0a0d13] border border-white/[0.08] rounded-lg px-3 py-2.5 text-[13px] text-[#e2e8f0] focus:outline-none transition-all placeholder-[#4a5568]';
 
   function selectOpts(options, selected) {
     return options.map(o => `<option value="${o}" ${o === selected ? 'selected' : ''}>${o}</option>`).join('');
   }
 
   modal.innerHTML = `
-    <div class="fixed inset-0 bg-black/30 backdrop-blur-sm z-40" onclick="closeModal()"></div>
+    <div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" onclick="closeModal()"></div>
     <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden ring-1 ring-stone-200/50">
+      <div class="modal-panel rounded-2xl w-full max-w-lg max-h-[90vh] overflow-hidden border border-white/[0.06]">
         <div class="px-6 pt-6 pb-4 flex items-center justify-between">
-          <h2 class="text-base font-semibold text-gray-900">${client.name}</h2>
-          <button onclick="closeModal()" class="text-stone-400 hover:text-stone-600 text-lg leading-none transition-colors">&times;</button>
+          <h2 class="text-base font-semibold text-white">${client.name}</h2>
+          <button onclick="closeModal()" class="text-[#4a5568] hover:text-[#8892a8] text-lg leading-none transition-colors">&times;</button>
         </div>
         <div class="px-6 py-4 overflow-y-auto max-h-[65vh] space-y-6">
 
           <div>
-            <h3 class="text-[11px] font-semibold text-stone-400 uppercase tracking-widest mb-3">Client</h3>
+            <h3 class="text-[11px] font-semibold text-[#4a5568] uppercase tracking-widest mb-3 font-mono">Client</h3>
             <div>
-              <label class="block text-[12px] font-medium text-stone-500 mb-1">Name</label>
+              <label class="block text-[12px] font-medium text-[#64748b] mb-1">Name</label>
               <input type="text" id="edit-name" class="${inputCls}" value="${client.name}">
             </div>
           </div>
 
           <div>
-            <h3 class="text-[11px] font-semibold text-stone-400 uppercase tracking-widest mb-3">Contract</h3>
+            <h3 class="text-[11px] font-semibold text-[#4a5568] uppercase tracking-widest mb-3 font-mono">Contract</h3>
             <div class="grid grid-cols-2 gap-3">
               <div>
-                <label class="block text-[12px] font-medium text-stone-500 mb-1">Term</label>
-                <select id="edit-term" class="${inputCls} bg-white">${selectOpts(f.contract.fields.term.options, client.contract?.term)}</select>
+                <label class="block text-[12px] font-medium text-[#64748b] mb-1">Term</label>
+                <select id="edit-term" class="${inputCls}">${selectOpts(f.contract.fields.term.options, client.contract?.term)}</select>
               </div>
               <div>
-                <label class="block text-[12px] font-medium text-stone-500 mb-1">Bonus Term</label>
-                <select id="edit-bonus" class="${inputCls} bg-white">
+                <label class="block text-[12px] font-medium text-[#64748b] mb-1">Bonus Term</label>
+                <select id="edit-bonus" class="${inputCls}">
                   <option value="">None</option>
                   ${selectOpts(f.contract.fields.bonus_term.options, client.contract?.bonus_term)}
                 </select>
@@ -609,64 +646,64 @@ function openEditModal(idx) {
           </div>
 
           <div>
-            <h3 class="text-[11px] font-semibold text-stone-400 uppercase tracking-widest mb-3">Payment</h3>
+            <h3 class="text-[11px] font-semibold text-[#4a5568] uppercase tracking-widest mb-3 font-mono">Payment</h3>
             <div class="grid grid-cols-2 gap-3">
               <div>
-                <label class="block text-[12px] font-medium text-stone-500 mb-1">Period</label>
-                <select id="edit-period" class="${inputCls} bg-white">${selectOpts(f.payment.fields.period.options, client.payment?.period)}</select>
+                <label class="block text-[12px] font-medium text-[#64748b] mb-1">Period</label>
+                <select id="edit-period" class="${inputCls}">${selectOpts(f.payment.fields.period.options, client.payment?.period)}</select>
               </div>
               <div>
-                <label class="block text-[12px] font-medium text-stone-500 mb-1">Processor</label>
-                <select id="edit-processor" class="${inputCls} bg-white">${selectOpts(f.payment.fields.processor.options, client.payment?.processor)}</select>
+                <label class="block text-[12px] font-medium text-[#64748b] mb-1">Processor</label>
+                <select id="edit-processor" class="${inputCls}">${selectOpts(f.payment.fields.processor.options, client.payment?.processor)}</select>
               </div>
               <div>
-                <label class="block text-[12px] font-medium text-stone-500 mb-1">Currency</label>
-                <select id="edit-currency" class="${inputCls} bg-white">${selectOpts(f.payment.fields.currency.options, client.payment?.currency)}</select>
+                <label class="block text-[12px] font-medium text-[#64748b] mb-1">Currency</label>
+                <select id="edit-currency" class="${inputCls}">${selectOpts(f.payment.fields.currency.options, client.payment?.currency)}</select>
               </div>
               <div>
-                <label class="block text-[12px] font-medium text-stone-500 mb-1">Amount</label>
+                <label class="block text-[12px] font-medium text-[#64748b] mb-1">Amount</label>
                 <input type="number" id="edit-amount" class="${inputCls}" value="${client.payment?.amount ?? ''}" step="any">
               </div>
             </div>
             <div class="flex items-center gap-3 mt-2">
-              <input type="checkbox" id="edit-gst" class="w-4 h-4 rounded border-stone-300 text-gray-900 focus:ring-stone-900/20" ${client.payment?.gst ? 'checked' : ''}>
-              <label for="edit-gst" class="text-[13px] font-medium text-stone-600">GST Applies</label>
+              <input type="checkbox" id="edit-gst" class="w-4 h-4 rounded border-white/[0.15] bg-[#0a0d13] text-indigo-500 focus:ring-indigo-500/20" ${client.payment?.gst ? 'checked' : ''}>
+              <label for="edit-gst" class="text-[13px] font-medium text-[#8892a8]">GST Applies</label>
             </div>
           </div>
 
           <div>
-            <h3 class="text-[11px] font-semibold text-stone-400 uppercase tracking-widest mb-3">Dates</h3>
+            <h3 class="text-[11px] font-semibold text-[#4a5568] uppercase tracking-widest mb-3 font-mono">Dates</h3>
             <div class="grid grid-cols-2 gap-3">
               <div>
-                <label class="block text-[12px] font-medium text-stone-500 mb-1">Client Start</label>
+                <label class="block text-[12px] font-medium text-[#64748b] mb-1">Client Start</label>
                 <input type="date" id="edit-client-start" class="${inputCls}" value="${client.dates?.client_start || ''}">
               </div>
               <div>
-                <label class="block text-[12px] font-medium text-stone-500 mb-1">Program Start</label>
+                <label class="block text-[12px] font-medium text-[#64748b] mb-1">Program Start</label>
                 <input type="date" id="edit-program-start" class="${inputCls}" value="${client.dates?.program_start || ''}">
               </div>
             </div>
           </div>
 
           <div>
-            <h3 class="text-[11px] font-semibold text-stone-400 uppercase tracking-widest mb-3">Reviews</h3>
+            <h3 class="text-[11px] font-semibold text-[#4a5568] uppercase tracking-widest mb-3 font-mono">Reviews</h3>
             <ul class="space-y-2 text-sm">
               ${reviewsList.length ? reviewsList.map(r => {
                 const dateStr = fmt(r.date);
                 if (r.completed) {
                   const doneStr = r.completed_date ? fmt(parseDate(r.completed_date)) : '—';
-                  const noteStr = r.notes ? `<br><span class="text-stone-400 text-xs ml-4">↳ ${r.notes}</span>` : '';
-                  return `<li class="text-gray-500">Review ${r.reviewNum}: ${dateStr} <span class="text-gray-400">✓ done ${doneStr}</span>${noteStr}</li>`;
+                  const noteStr = r.notes ? `<br><span class="text-[#4a5568] text-xs ml-4">↳ ${r.notes}</span>` : '';
+                  return `<li class="text-[#64748b]">Review ${r.reviewNum}: ${dateStr} <span class="text-emerald-400/60">✓ done ${doneStr}</span>${noteStr}</li>`;
                 }
-                return `<li class="text-gray-700">Review ${r.reviewNum}: ${dateStr} <button type="button" onclick="openReviewModal(${idx}, ${r.reviewNum})" class="ml-2 text-xs text-blue-600 hover:underline">Complete review</button></li>`;
-              }).join('') : '<li class="text-gray-400">No reviews in this term.</li>'}
+                return `<li class="text-[#e2e8f0]">Review ${r.reviewNum}: ${dateStr} <button type="button" onclick="openReviewModal(${idx}, ${r.reviewNum})" class="ml-2 text-xs text-indigo-400 hover:underline">Complete review</button></li>`;
+              }).join('') : '<li class="text-[#4a5568]">No reviews in this term.</li>'}
             </ul>
           </div>
 
           ${(client.pause_history && client.pause_history.length > 0) ? `
           <div>
-            <h3 class="text-[11px] font-semibold text-stone-400 uppercase tracking-widest mb-3">Pause History</h3>
-            <ul class="space-y-2 text-sm text-gray-600">
+            <h3 class="text-[11px] font-semibold text-[#4a5568] uppercase tracking-widest mb-3 font-mono">Pause History</h3>
+            <ul class="space-y-2 text-sm text-[#64748b] font-mono">
               ${client.pause_history.map(entry => {
                 const pd = entry.paused_date ? fmt(parseDate(entry.paused_date)) : '—';
                 const rd = entry.resumed_date ? fmt(parseDate(entry.resumed_date)) : '—';
@@ -680,20 +717,20 @@ function openEditModal(idx) {
           ` : ''}
 
         </div>
-        <div class="px-6 py-4 border-t border-stone-100 flex justify-between items-center">
+        <div class="px-6 py-4 border-t border-white/[0.06] flex justify-between items-center">
           <div class="flex items-center gap-2">
             ${client.status === 'active' ? `
-            <button type="button" onclick="showPauseForm(${idx})" class="px-3.5 py-2 text-[13px] font-medium text-stone-600 bg-stone-100 hover:bg-stone-200 rounded-lg transition-colors">Pause</button>
+            <button type="button" onclick="showPauseForm(${idx})" class="px-3.5 py-2 text-[13px] font-medium text-[#8892a8] bg-white/[0.04] hover:bg-white/[0.08] rounded-lg transition-colors border border-white/[0.06]">Pause</button>
             ` : client.status === 'paused' ? `
-            <button type="button" onclick="confirmResume(${idx})" class="px-3.5 py-2 text-[13px] font-medium text-stone-600 bg-stone-100 hover:bg-stone-200 rounded-lg transition-colors">Resume</button>
+            <button type="button" onclick="confirmResume(${idx})" class="px-3.5 py-2 text-[13px] font-medium text-[#8892a8] bg-white/[0.04] hover:bg-white/[0.08] rounded-lg transition-colors border border-white/[0.06]">Resume</button>
             ` : ''}
             ${client.status === 'active' || client.status === 'paused' ? `
-            <button type="button" onclick="confirmArchive(${idx})" class="px-3.5 py-2 text-[13px] font-medium text-stone-400 hover:text-stone-600 transition-colors">Archive</button>
+            <button type="button" onclick="confirmArchive(${idx})" class="px-3.5 py-2 text-[13px] font-medium text-[#4a5568] hover:text-rose-400 transition-colors">Archive</button>
             ` : client.status === 'archived' ? `
-            <button type="button" onclick="showReactivateForm(${idx})" class="px-3.5 py-2 text-[13px] font-medium text-stone-600 bg-stone-100 hover:bg-stone-200 rounded-lg transition-colors">Reactivate</button>
+            <button type="button" onclick="showReactivateForm(${idx})" class="px-3.5 py-2 text-[13px] font-medium text-[#8892a8] bg-white/[0.04] hover:bg-white/[0.08] rounded-lg transition-colors border border-white/[0.06]">Reactivate</button>
             ` : ''}
           </div>
-          <button onclick="saveEdit(${idx})" class="px-5 py-2 text-[13px] font-semibold text-white bg-gray-900 hover:bg-gray-800 rounded-lg transition-all shadow-sm">
+          <button onclick="saveEdit(${idx})" class="px-5 py-2 btn-primary text-[13px] font-semibold text-white rounded-lg">
             Save Changes
           </button>
         </div>
@@ -742,17 +779,17 @@ function showPauseForm(idx) {
   if (!modal) return;
   const today = todayISO();
   modal.innerHTML = `
-    <div class="fixed inset-0 bg-black/30 backdrop-blur-sm z-40" onclick="cancelPauseForm(${idx})"></div>
+    <div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" onclick="cancelPauseForm(${idx})"></div>
     <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden ring-1 ring-stone-200/50" id="pause-form" data-client-idx="${idx}">
+      <div class="modal-panel rounded-2xl w-full max-w-lg max-h-[90vh] overflow-hidden border border-white/[0.06]" id="pause-form" data-client-idx="${idx}">
         <div class="px-6 pt-6 pb-4 flex items-center justify-between">
-          <h2 class="text-base font-semibold text-gray-900">Pause: ${client.name}</h2>
-          <button type="button" onclick="cancelPauseForm(${idx})" class="text-stone-400 hover:text-stone-600 text-lg leading-none transition-colors">&times;</button>
+          <h2 class="text-base font-semibold text-white">Pause: ${client.name}</h2>
+          <button type="button" onclick="cancelPauseForm(${idx})" class="text-[#4a5568] hover:text-[#8892a8] text-lg leading-none transition-colors">&times;</button>
         </div>
         <div class="px-6 py-5 space-y-4">
           <div>
-            <label class="block text-[12px] font-medium text-stone-500 mb-1">How long?</label>
-            <select id="pause-mode" class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-[13px] text-gray-900 focus:ring-2 focus:ring-stone-900/10 focus:border-stone-400 outline-none transition-colors bg-white" onchange="togglePauseModePanels(); updatePausePreview();">
+            <label class="block text-[12px] font-medium text-[#64748b] mb-1">How long?</label>
+            <select id="pause-mode" class="input-dark w-full bg-[#0a0d13] border border-white/[0.08] rounded-lg px-3 py-2.5 text-[13px] text-[#e2e8f0] focus:outline-none transition-all" onchange="togglePauseModePanels(); updatePausePreview();">
               <option value="from_today">Duration from today</option>
               <option value="from_date">Duration from date</option>
               <option value="from_to">From – To (date range)</option>
@@ -760,49 +797,49 @@ function showPauseForm(idx) {
           </div>
           <div id="pause-mode-from_today" class="grid grid-cols-2 gap-3">
             <div>
-              <label class="block text-[12px] font-medium text-stone-500 mb-1">Weeks</label>
-              <input type="number" id="pause-weeks" min="0" value="2" class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-[13px] text-gray-900 focus:ring-2 focus:ring-stone-900/10 focus:border-stone-400 outline-none transition-colors bg-white" oninput="updatePausePreview()">
+              <label class="block text-[12px] font-medium text-[#64748b] mb-1">Weeks</label>
+              <input type="number" id="pause-weeks" min="0" value="2" class="input-dark w-full bg-[#0a0d13] border border-white/[0.08] rounded-lg px-3 py-2.5 text-[13px] text-[#e2e8f0] focus:outline-none transition-all" oninput="updatePausePreview()">
             </div>
             <div>
-              <label class="block text-[12px] font-medium text-stone-500 mb-1">Days</label>
-              <input type="number" id="pause-days" min="0" value="0" class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-[13px] text-gray-900 focus:ring-2 focus:ring-stone-900/10 focus:border-stone-400 outline-none transition-colors bg-white" oninput="updatePausePreview()">
+              <label class="block text-[12px] font-medium text-[#64748b] mb-1">Days</label>
+              <input type="number" id="pause-days" min="0" value="0" class="input-dark w-full bg-[#0a0d13] border border-white/[0.08] rounded-lg px-3 py-2.5 text-[13px] text-[#e2e8f0] focus:outline-none transition-all" oninput="updatePausePreview()">
             </div>
           </div>
           <div id="pause-mode-from_date" class="grid grid-cols-2 gap-3 hidden">
             <div>
-              <label class="block text-[12px] font-medium text-stone-500 mb-1">Start date</label>
-              <input type="date" id="pause-start-date" class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-[13px] text-gray-900 focus:ring-2 focus:ring-stone-900/10 focus:border-stone-400 outline-none transition-colors bg-white" value="${today}" onchange="updatePausePreview()">
+              <label class="block text-[12px] font-medium text-[#64748b] mb-1">Start date</label>
+              <input type="date" id="pause-start-date" class="input-dark w-full bg-[#0a0d13] border border-white/[0.08] rounded-lg px-3 py-2.5 text-[13px] text-[#e2e8f0] focus:outline-none transition-all" value="${today}" onchange="updatePausePreview()">
             </div>
             <div class="col-span-2 grid grid-cols-2 gap-3">
               <div>
-                <label class="block text-[12px] font-medium text-stone-500 mb-1">Weeks</label>
-                <input type="number" id="pause-from-weeks" min="0" value="2" class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-[13px] text-gray-900 focus:ring-2 focus:ring-stone-900/10 focus:border-stone-400 outline-none transition-colors bg-white" oninput="updatePausePreview()">
+                <label class="block text-[12px] font-medium text-[#64748b] mb-1">Weeks</label>
+                <input type="number" id="pause-from-weeks" min="0" value="2" class="input-dark w-full bg-[#0a0d13] border border-white/[0.08] rounded-lg px-3 py-2.5 text-[13px] text-[#e2e8f0] focus:outline-none transition-all" oninput="updatePausePreview()">
               </div>
               <div>
-                <label class="block text-[12px] font-medium text-stone-500 mb-1">Days</label>
-                <input type="number" id="pause-from-days" min="0" value="0" class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-[13px] text-gray-900 focus:ring-2 focus:ring-stone-900/10 focus:border-stone-400 outline-none transition-colors bg-white" oninput="updatePausePreview()">
+                <label class="block text-[12px] font-medium text-[#64748b] mb-1">Days</label>
+                <input type="number" id="pause-from-days" min="0" value="0" class="input-dark w-full bg-[#0a0d13] border border-white/[0.08] rounded-lg px-3 py-2.5 text-[13px] text-[#e2e8f0] focus:outline-none transition-all" oninput="updatePausePreview()">
               </div>
             </div>
           </div>
           <div id="pause-mode-from_to" class="grid grid-cols-2 gap-3 hidden">
             <div>
-              <label class="block text-[12px] font-medium text-stone-500 mb-1">From (start)</label>
-              <input type="date" id="pause-from-to-start" class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-[13px] text-gray-900 focus:ring-2 focus:ring-stone-900/10 focus:border-stone-400 outline-none transition-colors bg-white" value="${today}" onchange="updatePausePreview()">
+              <label class="block text-[12px] font-medium text-[#64748b] mb-1">From (start)</label>
+              <input type="date" id="pause-from-to-start" class="input-dark w-full bg-[#0a0d13] border border-white/[0.08] rounded-lg px-3 py-2.5 text-[13px] text-[#e2e8f0] focus:outline-none transition-all" value="${today}" onchange="updatePausePreview()">
             </div>
             <div>
-              <label class="block text-[12px] font-medium text-stone-500 mb-1">To (end)</label>
-              <input type="date" id="pause-from-to-end" class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-[13px] text-gray-900 focus:ring-2 focus:ring-stone-900/10 focus:border-stone-400 outline-none transition-colors bg-white" value="" onchange="updatePausePreview()">
+              <label class="block text-[12px] font-medium text-[#64748b] mb-1">To (end)</label>
+              <input type="date" id="pause-from-to-end" class="input-dark w-full bg-[#0a0d13] border border-white/[0.08] rounded-lg px-3 py-2.5 text-[13px] text-[#e2e8f0] focus:outline-none transition-all" value="" onchange="updatePausePreview()">
             </div>
           </div>
-          <p class="text-[13px] text-stone-600"><span class="font-medium text-stone-400">Preview:</span> <span id="pause-preview">—</span></p>
+          <p class="text-[13px] text-[#e2e8f0] font-mono"><span class="font-medium text-[#4a5568]">Preview:</span> <span id="pause-preview">—</span></p>
           <div>
-            <label class="block text-[12px] font-medium text-stone-500 mb-1">Reason (optional)</label>
-            <input type="text" id="pause-reason" class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-[13px] text-gray-900 focus:ring-2 focus:ring-stone-900/10 focus:border-stone-400 outline-none transition-colors bg-white" placeholder="e.g. travel, injury">
+            <label class="block text-[12px] font-medium text-[#64748b] mb-1">Reason (optional)</label>
+            <input type="text" id="pause-reason" class="input-dark w-full bg-[#0a0d13] border border-white/[0.08] rounded-lg px-3 py-2.5 text-[13px] text-[#e2e8f0] focus:outline-none transition-all" placeholder="e.g. travel, injury">
           </div>
         </div>
-        <div class="px-6 py-4 border-t border-stone-100 flex justify-between">
-          <button type="button" onclick="cancelPauseForm(${idx})" class="px-3.5 py-2 text-[13px] font-medium text-stone-500 hover:text-stone-700 transition-colors">Cancel</button>
-          <button type="button" onclick="submitPauseForm(${idx})" class="px-5 py-2 text-[13px] font-semibold text-white bg-gray-900 hover:bg-gray-800 rounded-lg transition-all shadow-sm">Confirm Pause</button>
+        <div class="px-6 py-4 border-t border-white/[0.06] flex justify-between">
+          <button type="button" onclick="cancelPauseForm(${idx})" class="px-3.5 py-2 text-[13px] font-medium text-[#64748b] hover:text-[#e2e8f0] transition-colors">Cancel</button>
+          <button type="button" onclick="submitPauseForm(${idx})" class="px-5 py-2 btn-primary text-[13px] font-semibold text-white rounded-lg">Confirm Pause</button>
         </div>
       </div>
     </div>`;
@@ -921,37 +958,37 @@ function openRenewalModal(idx) {
   if (!client || client.renewal?.status !== 'pending') return;
   const modal = document.getElementById('add-client-modal');
   if (!modal) return;
-  const inputCls = 'w-full border border-stone-200 rounded-lg px-3 py-2.5 text-[13px] text-gray-900 focus:ring-2 focus:ring-stone-900/10 focus:border-stone-400 outline-none transition-colors bg-white';
+  const inputCls = 'input-dark w-full bg-[#0a0d13] border border-white/[0.08] rounded-lg px-3 py-2.5 text-[13px] text-[#e2e8f0] focus:outline-none transition-all placeholder-[#4a5568]';
   modal.classList.remove('hidden');
   modal.innerHTML = `
-    <div class="fixed inset-0 bg-black/30 backdrop-blur-sm z-40" onclick="closeModal()"></div>
+    <div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" onclick="closeModal()"></div>
     <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg ring-1 ring-stone-200/50">
+      <div class="modal-panel rounded-2xl w-full max-w-lg border border-white/[0.06]">
         <div class="px-6 pt-6 pb-4 flex items-center justify-between">
-          <h2 class="text-base font-semibold text-gray-900">Renewal: ${client.name}</h2>
-          <button type="button" onclick="closeModal()" class="text-stone-400 hover:text-stone-600 text-lg leading-none transition-colors">&times;</button>
+          <h2 class="text-base font-semibold text-white">Renewal: ${client.name}</h2>
+          <button type="button" onclick="closeModal()" class="text-[#4a5568] hover:text-[#8892a8] text-lg leading-none transition-colors">&times;</button>
         </div>
         <div class="px-6 py-5 space-y-4">
           <div>
-            <label class="block text-[12px] font-medium text-stone-500 mb-1">Outcome</label>
-            <select id="renewal-outcome" class="${inputCls} bg-white">
+            <label class="block text-[12px] font-medium text-[#64748b] mb-1">Outcome</label>
+            <select id="renewal-outcome" class="${inputCls}">
               <option value="renewed">Renewed</option>
               <option value="churned">Churned</option>
               <option value="paused">Paused</option>
             </select>
           </div>
           <div id="renewal-program-start-wrap">
-            <label class="block text-[12px] font-medium text-stone-500 mb-1">New program start (new term)</label>
+            <label class="block text-[12px] font-medium text-[#64748b] mb-1">New program start (new term)</label>
             <input type="date" id="renewal-program-start" class="${inputCls}" value="${client.dates?.program_start || ''}">
           </div>
           <div>
-            <label class="block text-[12px] font-medium text-stone-500 mb-1">Notes (optional)</label>
+            <label class="block text-[12px] font-medium text-[#64748b] mb-1">Notes (optional)</label>
             <input type="text" id="renewal-notes" class="${inputCls}" placeholder="e.g. upgraded to 12mth">
           </div>
         </div>
-        <div class="px-6 py-4 border-t border-stone-100 flex justify-end gap-2">
-          <button type="button" onclick="closeModal()" class="px-3.5 py-2 text-[13px] font-medium text-stone-500 hover:text-stone-700 transition-colors">Cancel</button>
-          <button type="button" onclick="submitRenewal(${idx})" class="px-5 py-2 text-[13px] font-semibold text-white bg-gray-900 hover:bg-gray-800 rounded-lg transition-all shadow-sm">Save outcome</button>
+        <div class="px-6 py-4 border-t border-white/[0.06] flex justify-end gap-2">
+          <button type="button" onclick="closeModal()" class="px-3.5 py-2 text-[13px] font-medium text-[#64748b] hover:text-[#e2e8f0] transition-colors">Cancel</button>
+          <button type="button" onclick="submitRenewal(${idx})" class="px-5 py-2 btn-primary text-[13px] font-semibold text-white rounded-lg">Save outcome</button>
         </div>
       </div>
     </div>`;
@@ -996,31 +1033,31 @@ function showReactivateForm(idx) {
   const modal = document.getElementById('add-client-modal');
   if (!modal) return;
   const f = schemaCache?.fields;
-  const inputCls = 'w-full border border-stone-200 rounded-lg px-3 py-2.5 text-[13px] text-gray-900 focus:ring-2 focus:ring-stone-900/10 focus:border-stone-400 outline-none transition-colors bg-white';
+  const inputCls = 'input-dark w-full bg-[#0a0d13] border border-white/[0.08] rounded-lg px-3 py-2.5 text-[13px] text-[#e2e8f0] focus:outline-none transition-all placeholder-[#4a5568]';
   const termOpts = f?.contract?.fields?.term?.options ? f.contract.fields.term.options.map(o => `<option value="${o}" ${o === (client.contract?.term) ? 'selected' : ''}>${o}</option>`).join('') : '';
   modal.classList.remove('hidden');
   modal.innerHTML = `
-    <div class="fixed inset-0 bg-black/30 backdrop-blur-sm z-40" onclick="closeModal()"></div>
+    <div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" onclick="closeModal()"></div>
     <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg ring-1 ring-stone-200/50">
+      <div class="modal-panel rounded-2xl w-full max-w-lg border border-white/[0.06]">
         <div class="px-6 pt-6 pb-4 flex items-center justify-between">
-          <h2 class="text-base font-semibold text-gray-900">Reactivate: ${client.name}</h2>
-          <button type="button" onclick="closeModal(); openEditModal(${idx})" class="text-stone-400 hover:text-stone-600 text-lg leading-none transition-colors">&times;</button>
+          <h2 class="text-base font-semibold text-white">Reactivate: ${client.name}</h2>
+          <button type="button" onclick="closeModal(); openEditModal(${idx})" class="text-[#4a5568] hover:text-[#8892a8] text-lg leading-none transition-colors">&times;</button>
         </div>
         <div class="px-6 py-5 space-y-4">
-          <p class="text-[13px] text-stone-500">Set the new program start date and optional contract term. Client will return as active with health "Onboarding".</p>
+          <p class="text-[13px] text-[#64748b]">Set the new program start date and optional contract term. Client will return as active with health "Onboarding".</p>
           <div>
-            <label class="block text-[12px] font-medium text-stone-500 mb-1">New program start</label>
+            <label class="block text-[12px] font-medium text-[#64748b] mb-1">New program start</label>
             <input type="date" id="reactivate-program-start" class="${inputCls}" value="${todayISO()}" required>
           </div>
           <div>
-            <label class="block text-[12px] font-medium text-stone-500 mb-1">Contract term (optional)</label>
-            <select id="reactivate-term" class="${inputCls} bg-white">${termOpts}</select>
+            <label class="block text-[12px] font-medium text-[#64748b] mb-1">Contract term (optional)</label>
+            <select id="reactivate-term" class="${inputCls}">${termOpts}</select>
           </div>
         </div>
-        <div class="px-6 py-4 border-t border-stone-100 flex justify-end gap-2">
-          <button type="button" onclick="closeModal(); openEditModal(${idx})" class="px-3.5 py-2 text-[13px] font-medium text-stone-500 hover:text-stone-700 transition-colors">Cancel</button>
-          <button type="button" onclick="submitReactivate(${idx})" class="px-5 py-2 text-[13px] font-semibold text-white bg-gray-900 hover:bg-gray-800 rounded-lg transition-all shadow-sm">Reactivate</button>
+        <div class="px-6 py-4 border-t border-white/[0.06] flex justify-end gap-2">
+          <button type="button" onclick="closeModal(); openEditModal(${idx})" class="px-3.5 py-2 text-[13px] font-medium text-[#64748b] hover:text-[#e2e8f0] transition-colors">Cancel</button>
+          <button type="button" onclick="submitReactivate(${idx})" class="px-5 py-2 btn-primary text-[13px] font-semibold text-white rounded-lg">Reactivate</button>
         </div>
       </div>
     </div>`;
@@ -1070,8 +1107,8 @@ async function handleSignIn() {
   const password = document.getElementById('auth-password')?.value;
   const errorEl  = document.getElementById('auth-error');
   errorEl.classList.add('hidden');
-  errorEl.classList.remove('text-emerald-600');
-  errorEl.classList.add('text-red-500');
+  errorEl.classList.remove('text-emerald-400');
+  errorEl.classList.add('text-red-400');
 
   if (!email || !password) {
     errorEl.textContent = 'Email and password required';
@@ -1093,8 +1130,8 @@ async function handleSignUp() {
   const password = document.getElementById('auth-password')?.value;
   const errorEl  = document.getElementById('auth-error');
   errorEl.classList.add('hidden');
-  errorEl.classList.remove('text-emerald-600');
-  errorEl.classList.add('text-red-500');
+  errorEl.classList.remove('text-emerald-400');
+  errorEl.classList.add('text-red-400');
 
   if (!email || !password) {
     errorEl.textContent = 'Email and password required';
@@ -1116,8 +1153,8 @@ async function handleSignUp() {
     }
     errorEl.textContent = 'Account created! Check your email to confirm, then sign in.';
     errorEl.classList.remove('hidden');
-    errorEl.classList.remove('text-red-500');
-    errorEl.classList.add('text-emerald-600');
+    errorEl.classList.remove('text-red-400');
+    errorEl.classList.add('text-emerald-400');
   } catch (e) {
     errorEl.textContent = e.message || 'Sign up failed';
     errorEl.classList.remove('hidden');
@@ -1229,7 +1266,7 @@ async function init() {
     if (tbody) {
       tbody.innerHTML = `
         <tr><td colspan="99" class="text-center py-12">
-          <p class="text-red-500 font-medium mb-2">Could not load data</p>
+          <p class="text-red-400 font-medium mb-2">Could not load data</p>
           <p class="text-gray-500 text-sm">${e.message}</p>
         </td></tr>`;
     }

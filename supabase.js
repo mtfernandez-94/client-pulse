@@ -3,8 +3,8 @@
 // ── Supabase Configuration ────────────────────────────────────────────────
 // These are safe to expose client-side. Row-Level Security protects data.
 // Replace with your Supabase project values (Settings > API in the dashboard).
-const SUPABASE_URL = 'YOUR_SUPABASE_URL';
-const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+const SUPABASE_URL = 'https://ndwfoggnabcospyhpxai.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_ADqC4q0uwaJPXroIwIvJkg_fDFxwaOv';
 
 // Initialise Supabase client (supabase-js loaded via CDN in index.html)
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);

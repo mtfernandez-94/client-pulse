@@ -3,53 +3,218 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Client Pulse</title>
+  <title>ClientPulse</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script>
     tailwind.config = {
       safelist: [
-        'backdrop-blur-sm', 'bg-black/30', 'bg-stone-50/40',
-        'ring-stone-200/50', 'rounded-2xl', 'shadow-2xl', 'tabular-nums',
-        '-translate-x-1/2', 'hover:bg-stone-50/60',
-        'focus:ring-stone-900/10', 'focus:ring-stone-900/20',
+        'backdrop-blur-sm', 'backdrop-blur-xl', 'backdrop-blur-2xl',
+        'bg-black/50', 'bg-black/60', 'bg-black/70',
+        'rounded-2xl', 'rounded-xl', 'shadow-2xl', 'tabular-nums',
+        '-translate-x-1/2', 'hover:bg-white/[0.04]',
         'text-[9px]', 'text-[10px]', 'text-[11px]', 'text-[12px]', 'text-[13px]',
         'w-[8px]', 'w-[10px]', 'h-[8px]', 'h-[10px]', 'h-[48px]',
         'max-h-[65vh]', 'max-h-[90vh]',
       ],
       theme: {
         extend: {
-          fontFamily: { sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'] },
+          fontFamily: {
+            sans: ['Space Grotesk', 'system-ui', '-apple-system', 'sans-serif'],
+            mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
+          },
+          colors: {
+            surface: {
+              0: '#050608',
+              1: '#0a0d13',
+              2: '#111520',
+              3: '#181d2b',
+              4: '#1f2536',
+            },
+            accent: {
+              DEFAULT: '#818cf8',
+              dim: 'rgba(129, 140, 248, 0.10)',
+              border: 'rgba(129, 140, 248, 0.20)',
+            },
+          },
         }
       }
     }
   </script>
   <style>
-    body { font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11'; -webkit-font-smoothing: antialiased; }
-    ::selection { background: rgba(59, 130, 246, 0.15); }
-    table { border-collapse: separate; border-spacing: 0; }
-    .filter-pill { transition: all 0.15s ease; }
-    .filter-pill:hover { background: rgba(0,0,0,0.04); }
-    .filter-pill.active { background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+    body {
+      font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+      -webkit-font-smoothing: antialiased;
+      background: #050608;
+    }
 
-    /* Gantt tooltip dots */
+    /* ── Dot grid background ─────────────────────────────────────────── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      background-image: radial-gradient(rgba(255,255,255,0.03) 1px, transparent 1px);
+      background-size: 24px 24px;
+    }
+
+    ::selection { background: rgba(129, 140, 248, 0.2); }
+    table { border-collapse: separate; border-spacing: 0; }
+
+    /* ── 3D Depth System ─────────────────────────────────────────────── */
+    .depth-1 {
+      box-shadow:
+        0 1px 2px rgba(0,0,0,0.3),
+        0 4px 8px rgba(0,0,0,0.15),
+        inset 0 1px 0 rgba(255,255,255,0.04);
+    }
+    .depth-2 {
+      box-shadow:
+        0 2px 4px rgba(0,0,0,0.3),
+        0 8px 16px rgba(0,0,0,0.2),
+        0 16px 32px rgba(0,0,0,0.1),
+        inset 0 1px 0 rgba(255,255,255,0.05);
+    }
+    .depth-3 {
+      box-shadow:
+        0 4px 8px rgba(0,0,0,0.3),
+        0 12px 24px rgba(0,0,0,0.25),
+        0 24px 48px rgba(0,0,0,0.15),
+        inset 0 1px 0 rgba(255,255,255,0.06);
+    }
+
+    /* ── Glass panels ────────────────────────────────────────────────── */
+    .glass {
+      background: linear-gradient(145deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01));
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+
+    /* ── KPI Cards ───────────────────────────────────────────────────── */
+    .kpi-card {
+      background: linear-gradient(145deg, rgba(255,255,255,0.035), rgba(255,255,255,0.008));
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 14px;
+      padding: 18px 22px;
+      position: relative;
+      overflow: hidden;
+      box-shadow:
+        0 2px 4px rgba(0,0,0,0.25),
+        0 6px 12px rgba(0,0,0,0.18),
+        0 12px 24px rgba(0,0,0,0.1),
+        inset 0 1px 0 rgba(255,255,255,0.06);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .kpi-card::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 3px;
+      background: var(--kpi-color);
+      box-shadow: 0 0 10px var(--kpi-color), 0 0 20px var(--kpi-bg);
+      border-radius: 0 2px 2px 0;
+    }
+    .kpi-card::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 50%;
+      background: radial-gradient(ellipse at center bottom, var(--kpi-bg), transparent 70%);
+      pointer-events: none;
+    }
+    .kpi-card:hover {
+      transform: translateY(-3px);
+      box-shadow:
+        0 4px 8px rgba(0,0,0,0.3),
+        0 12px 24px rgba(0,0,0,0.22),
+        0 24px 48px rgba(0,0,0,0.15),
+        inset 0 1px 0 rgba(255,255,255,0.07);
+    }
+    .kpi-value {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--kpi-color);
+      line-height: 1;
+      margin-bottom: 6px;
+      text-shadow: 0 0 24px var(--kpi-bg);
+      position: relative;
+      z-index: 1;
+    }
+    .kpi-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: #4a5568;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ── Health distribution bar ──────────────────────────────────────── */
+    .health-bar-segment {
+      transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+    }
+    .health-bar-segment::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.2);
+    }
+
+    /* ── Filter pills ────────────────────────────────────────────────── */
+    .filter-pill {
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+    }
+    .filter-pill:hover { background: rgba(255,255,255,0.06); }
+    .filter-pill.active {
+      background: rgba(129, 140, 248, 0.10);
+      color: #818cf8;
+      box-shadow:
+        0 0 12px rgba(129, 140, 248, 0.06),
+        inset 0 1px 0 rgba(129, 140, 248, 0.1);
+    }
+
+    /* ── Table rows with 3D depth ────────────────────────────────────── */
+    tbody tr {
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    tbody tr:hover {
+      background: rgba(255,255,255,0.025);
+      box-shadow:
+        0 2px 8px rgba(0,0,0,0.15),
+        0 4px 16px rgba(0,0,0,0.1) !important;
+    }
+    thead tr {
+      background: linear-gradient(180deg, rgba(255,255,255,0.03), transparent);
+    }
+
+    /* ── Gantt tooltip ───────────────────────────────────────────────── */
     .gantt-dot { position: absolute; }
     .gantt-tooltip {
       display: none;
       position: absolute;
-      bottom: calc(100% + 6px);
+      bottom: calc(100% + 8px);
       left: 50%;
       transform: translateX(-50%);
-      background: #1c1917;
-      color: #fff;
+      background: linear-gradient(145deg, #e2e8f0, #cbd5e1);
+      color: #050608;
       font-size: 11px;
-      font-weight: 500;
-      padding: 4px 8px;
-      border-radius: 6px;
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+      padding: 5px 12px;
+      border-radius: 8px;
       white-space: nowrap;
       pointer-events: none;
       z-index: 50;
+      box-shadow:
+        0 4px 12px rgba(0,0,0,0.3),
+        inset 0 1px 0 rgba(255,255,255,0.5);
     }
     .gantt-tooltip::after {
       content: '';
@@ -57,107 +222,212 @@
       top: 100%;
       left: 50%;
       transform: translateX(-50%);
-      border: 4px solid transparent;
-      border-top-color: #1c1917;
+      border: 5px solid transparent;
+      border-top-color: #cbd5e1;
     }
     .gantt-dot:hover .gantt-tooltip { display: block; }
+
+    /* ── Custom scrollbar ────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.12); }
+
+    /* ── Primary button with 3D glow ─────────────────────────────────── */
+    .btn-primary {
+      background: linear-gradient(135deg, #818cf8, #6366f1);
+      box-shadow:
+        0 0 20px rgba(129, 140, 248, 0.15),
+        0 2px 4px rgba(0,0,0,0.3),
+        0 4px 8px rgba(99, 102, 241, 0.15),
+        inset 0 1px 0 rgba(255,255,255,0.15);
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .btn-primary:hover {
+      box-shadow:
+        0 0 30px rgba(129, 140, 248, 0.3),
+        0 4px 8px rgba(0,0,0,0.3),
+        0 8px 16px rgba(99, 102, 241, 0.2),
+        inset 0 1px 0 rgba(255,255,255,0.2);
+      transform: translateY(-2px);
+    }
+    .btn-primary:active {
+      transform: translateY(0);
+      box-shadow:
+        0 0 15px rgba(129, 140, 248, 0.1),
+        0 1px 2px rgba(0,0,0,0.3),
+        inset 0 2px 4px rgba(0,0,0,0.2);
+    }
+
+    /* ── Secondary button with depth ─────────────────────────────────── */
+    .btn-secondary {
+      background: linear-gradient(145deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+      border: 1px solid rgba(255,255,255,0.06);
+      box-shadow:
+        0 1px 2px rgba(0,0,0,0.2),
+        0 2px 4px rgba(0,0,0,0.1),
+        inset 0 1px 0 rgba(255,255,255,0.05);
+      transition: all 0.2s ease;
+    }
+    .btn-secondary:hover {
+      background: linear-gradient(145deg, rgba(255,255,255,0.07), rgba(255,255,255,0.03));
+      box-shadow:
+        0 2px 4px rgba(0,0,0,0.25),
+        0 4px 8px rgba(0,0,0,0.15),
+        inset 0 1px 0 rgba(255,255,255,0.06);
+      transform: translateY(-1px);
+    }
+
+    /* ── Input fields with inset 3D ──────────────────────────────────── */
+    .input-dark {
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.25), inset 0 0 0 1px rgba(0,0,0,0.1);
+      transition: all 0.2s ease;
+    }
+    .input-dark:focus {
+      border-color: rgba(129, 140, 248, 0.35);
+      box-shadow:
+        inset 0 2px 4px rgba(0,0,0,0.15),
+        0 0 0 3px rgba(129, 140, 248, 0.08),
+        0 0 16px rgba(129, 140, 248, 0.04);
+    }
+
+    /* ── Modal glass panel ───────────────────────────────────────────── */
+    .modal-panel {
+      background: linear-gradient(145deg, rgba(24, 29, 43, 0.95), rgba(24, 29, 43, 0.88));
+      backdrop-filter: blur(40px);
+      -webkit-backdrop-filter: blur(40px);
+      box-shadow:
+        0 4px 8px rgba(0,0,0,0.3),
+        0 16px 32px rgba(0,0,0,0.25),
+        0 32px 64px rgba(0,0,0,0.2),
+        0 0 0 1px rgba(255,255,255,0.06),
+        inset 0 1px 0 rgba(255,255,255,0.06);
+    }
+
+    /* ── Pulse animation ─────────────────────────────────────────────── */
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+    .pulse-dot { animation: pulse-dot 2.5s ease-in-out infinite; }
+
+    /* ── Ambient glow ────────────────────────────────────────────────── */
+    .glow-indigo {
+      box-shadow:
+        0 0 60px rgba(129, 140, 248, 0.06),
+        0 0 120px rgba(129, 140, 248, 0.03),
+        0 8px 32px rgba(0,0,0,0.3);
+    }
+
+    /* ── Badge depth ─────────────────────────────────────────────────── */
+    .badge-3d {
+      box-shadow:
+        0 1px 2px rgba(0,0,0,0.2),
+        inset 0 1px 0 rgba(255,255,255,0.1);
+    }
   </style>
 </head>
-<body class="bg-stone-50 min-h-screen text-gray-900 font-sans">
+<body class="min-h-screen text-[#e2e8f0] font-sans relative">
 
-  <!-- Login screen (shown when not authenticated) -->
-  <div id="login-screen" class="hidden min-h-screen flex items-center justify-center bg-stone-50">
-    <div class="bg-white rounded-2xl shadow-lg w-full max-w-sm p-8 ring-1 ring-stone-200/50">
-      <h1 class="text-xl font-semibold tracking-tight text-gray-900 mb-1">Client Pulse</h1>
-      <p class="text-[13px] text-stone-400 mb-6">Sign in to manage your clients</p>
-      <div id="auth-error" class="hidden text-red-500 text-[13px] mb-4 rounded-lg"></div>
+  <!-- ═══ Login screen ═══════════════════════════════════════════════ -->
+  <div id="login-screen" class="hidden min-h-screen flex items-center justify-center relative z-10">
+    <div class="glass rounded-2xl w-full max-w-sm p-8 glow-indigo depth-3">
+      <div class="flex items-center gap-3 mb-1">
+        <div class="w-2.5 h-2.5 rounded-full bg-indigo-400 pulse-dot" style="box-shadow: 0 0 10px rgba(129,140,248,0.5);"></div>
+        <h1 class="text-xl font-bold tracking-tight text-white">ClientPulse</h1>
+      </div>
+      <p class="text-[13px] text-[#64748b] mb-6 font-medium">Sign in to access command center</p>
+      <div id="auth-error" class="hidden text-red-400 text-[13px] mb-4 rounded-lg"></div>
       <div class="space-y-3">
         <input id="auth-email" type="email" placeholder="Email"
-          class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-[13px] focus:ring-2 focus:ring-stone-900/10 focus:border-stone-400 outline-none transition-colors">
+          class="input-dark w-full bg-surface-1 border border-white/[0.08] rounded-xl px-3.5 py-2.5 text-[13px] text-[#e2e8f0] placeholder-[#4a5568] focus:outline-none transition-all">
         <input id="auth-password" type="password" placeholder="Password"
-          class="w-full border border-stone-200 rounded-lg px-3 py-2.5 text-[13px] focus:ring-2 focus:ring-stone-900/10 focus:border-stone-400 outline-none transition-colors">
+          class="input-dark w-full bg-surface-1 border border-white/[0.08] rounded-xl px-3.5 py-2.5 text-[13px] text-[#e2e8f0] placeholder-[#4a5568] focus:outline-none transition-all">
       </div>
-      <button id="btn-sign-in" class="w-full mt-4 px-4 py-2.5 text-[13px] font-semibold text-white bg-gray-900 hover:bg-gray-800 rounded-lg transition-all shadow-sm">Sign In</button>
-      <button id="btn-sign-up" class="w-full mt-2 px-4 py-2.5 text-[13px] font-medium text-stone-600 bg-stone-100 hover:bg-stone-200 rounded-lg transition-all">Create Account</button>
+      <button id="btn-sign-in" class="btn-primary w-full mt-4 px-4 py-2.5 text-[13px] font-semibold text-white rounded-xl cursor-pointer">Sign In</button>
+      <button id="btn-sign-up" class="btn-secondary w-full mt-2 px-4 py-2.5 text-[13px] font-medium text-[#64748b] rounded-xl cursor-pointer">Create Account</button>
     </div>
   </div>
 
-  <!-- App (shown when authenticated) -->
-  <div id="app-container" class="hidden">
+  <!-- ═══ App (shown when authenticated) ═════════════════════════════ -->
+  <div id="app-container" class="hidden relative z-10">
 
-    <!-- Header -->
-    <header class="bg-white/80 backdrop-blur-xl border-b border-stone-200/60 px-8 py-5 flex items-center justify-between sticky top-0 z-10">
-      <div>
-        <h1 class="text-xl font-semibold tracking-tight text-gray-900">Client Pulse</h1>
-        <div id="stats" class="text-[13px] mt-1 text-stone-400 font-medium tracking-wide"></div>
+    <!-- ── Header ──────────────────────────────────────────────────── -->
+    <header class="bg-surface-1/80 backdrop-blur-xl border-b border-white/[0.05] px-8 py-4 flex items-center justify-between sticky top-0 z-10 depth-1">
+      <div class="flex items-center gap-3">
+        <div class="w-2.5 h-2.5 rounded-full bg-indigo-400 pulse-dot" style="box-shadow: 0 0 10px rgba(129,140,248,0.5);"></div>
+        <h1 class="text-lg font-bold tracking-tight text-white">ClientPulse</h1>
+        <div id="today-display" class="text-[12px] text-[#4a5568] font-mono font-medium tracking-wide ml-4 hidden sm:block"></div>
       </div>
-      <div class="flex items-center gap-5">
-        <div id="today-display" class="text-[13px] text-stone-400 font-medium tracking-wide"></div>
-        <button id="btn-export-csv" class="px-4 py-2 text-[13px] font-medium text-stone-600 bg-stone-100 hover:bg-stone-200 rounded-lg transition-all">Export CSV</button>
-        <button id="btn-add-client" class="px-4 py-2 text-[13px] font-semibold text-white bg-gray-900 hover:bg-gray-800 rounded-lg transition-all shadow-sm hover:shadow">+ Add Client</button>
-        <button id="btn-sign-out" class="px-4 py-2 text-[13px] font-medium text-stone-400 hover:text-stone-600 transition-colors">Sign Out</button>
+      <div class="flex items-center gap-2.5">
+        <button id="btn-export-csv" class="btn-secondary px-4 py-2 text-[13px] font-medium text-[#8892a8] rounded-lg cursor-pointer">Export CSV</button>
+        <button id="btn-add-client" class="btn-primary px-4 py-2 text-[13px] font-semibold text-white rounded-lg cursor-pointer">+ Add Client</button>
+        <button id="btn-sign-out" class="px-3 py-2 text-[13px] font-medium text-[#4a5568] hover:text-[#8892a8] transition-colors cursor-pointer">Sign Out</button>
       </div>
     </header>
 
-    <!-- Controls -->
-    <div class="bg-white/60 backdrop-blur-sm border-b border-stone-100 px-8 py-3 flex items-center gap-4 flex-wrap">
+    <!-- ── KPI Dashboard Strip ─────────────────────────────────────── -->
+    <div id="stats" class="px-8 py-5 border-b border-white/[0.04]">
+      <!-- Rendered by renderStats() — 3D KPI cards + health distribution bar -->
+    </div>
+
+    <!-- ── Controls ────────────────────────────────────────────────── -->
+    <div class="bg-surface-1/20 border-b border-white/[0.04] px-8 py-3 flex items-center gap-4 flex-wrap">
 
       <!-- Status filter -->
-      <div class="flex items-center gap-0.5 bg-stone-100/80 rounded-lg p-0.5">
-        <button id="filter-active"   class="filter-pill px-3.5 py-1.5 rounded-md text-[13px] font-medium text-stone-500">Active</button>
-        <button id="filter-paused"   class="filter-pill px-3.5 py-1.5 rounded-md text-[13px] font-medium text-stone-500">Paused</button>
-        <button id="filter-archived" class="filter-pill px-3.5 py-1.5 rounded-md text-[13px] font-medium text-stone-500">Archived</button>
-        <button id="filter-all"      class="filter-pill px-3.5 py-1.5 rounded-md text-[13px] font-medium text-stone-500">All</button>
+      <div class="flex items-center gap-0.5 bg-white/[0.02] rounded-lg p-0.5 border border-white/[0.04] depth-1">
+        <button id="filter-active"   class="filter-pill px-3.5 py-1.5 rounded-md text-[13px] font-medium text-[#64748b] cursor-pointer">Active</button>
+        <button id="filter-paused"   class="filter-pill px-3.5 py-1.5 rounded-md text-[13px] font-medium text-[#64748b] cursor-pointer">Paused</button>
+        <button id="filter-archived" class="filter-pill px-3.5 py-1.5 rounded-md text-[13px] font-medium text-[#64748b] cursor-pointer">Archived</button>
+        <button id="filter-all"      class="filter-pill px-3.5 py-1.5 rounded-md text-[13px] font-medium text-[#64748b] cursor-pointer">All</button>
       </div>
 
       <!-- Health filter -->
-      <select id="filter-health" class="text-[13px] border border-stone-200 rounded-lg px-3 py-1.5 text-stone-500 bg-white/80 cursor-pointer focus:ring-1 focus:ring-stone-300 focus:border-stone-300 outline-none">
+      <select id="filter-health" class="input-dark text-[13px] bg-surface-2 border border-white/[0.08] rounded-lg px-3 py-1.5 text-[#8892a8] cursor-pointer focus:outline-none transition-colors">
         <option value="">All health</option>
-        <!-- populated from schema in init() -->
       </select>
 
       <!-- Term filter -->
-      <select id="filter-term" class="text-[13px] border border-stone-200 rounded-lg px-3 py-1.5 text-stone-500 bg-white/80 cursor-pointer focus:ring-1 focus:ring-stone-300 focus:border-stone-300 outline-none">
+      <select id="filter-term" class="input-dark text-[13px] bg-surface-2 border border-white/[0.08] rounded-lg px-3 py-1.5 text-[#8892a8] cursor-pointer focus:outline-none transition-colors">
         <option value="">All terms</option>
-        <!-- populated from schema in init() -->
       </select>
 
       <!-- View toggle -->
-      <div class="flex items-center gap-0.5 bg-stone-100/80 rounded-lg p-0.5">
-        <button id="view-table" class="filter-pill px-3.5 py-1.5 rounded-md text-[13px] font-medium text-stone-500">Table</button>
-        <button id="view-gantt" class="filter-pill px-3.5 py-1.5 rounded-md text-[13px] font-medium text-stone-500">Gantt</button>
+      <div class="flex items-center gap-0.5 bg-white/[0.02] rounded-lg p-0.5 border border-white/[0.04] depth-1">
+        <button id="view-table" class="filter-pill px-3.5 py-1.5 rounded-md text-[13px] font-medium text-[#64748b] cursor-pointer">Table</button>
+        <button id="view-gantt" class="filter-pill px-3.5 py-1.5 rounded-md text-[13px] font-medium text-[#64748b] cursor-pointer">Gantt</button>
       </div>
-      <div id="row-count" class="ml-auto text-[13px] text-stone-400 font-medium"></div>
+      <div id="row-count" class="ml-auto text-[13px] text-[#4a5568] font-mono font-medium"></div>
     </div>
 
-    <!-- Table view -->
-    <div id="table-wrap" class="px-8 pt-1">
+    <!-- ── Table view ──────────────────────────────────────────────── -->
+    <div id="table-wrap" class="px-8 pt-2">
       <table class="w-full text-[13px]">
         <thead id="thead"></thead>
         <tbody id="tbody">
           <tr>
-            <td colspan="99" class="text-center text-stone-400 py-16 text-sm">Loading...</td>
+            <td colspan="99" class="text-center text-[#4a5568] py-16 text-sm font-mono">Initializing...</td>
           </tr>
         </tbody>
       </table>
     </div>
 
-    <!-- Gantt view -->
+    <!-- ── Gantt view ──────────────────────────────────────────────── -->
     <div id="gantt-wrap" class="hidden">
       <div id="gantt-inner" class="min-w-full"></div>
     </div>
 
-    <!-- Modal container -->
+    <!-- ── Modal container ─────────────────────────────────────────── -->
     <div id="add-client-modal" class="hidden"></div>
 
   </div><!-- /app-container -->
 
   <!-- Scripts: Supabase CDN first, then app modules -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase.js?v=1"></script>
-  <script src="dateEngine.js?v=3"></script>
-  <script src="addClient.js?v=3"></script>
-  <script src="gantt.js?v=3"></script>
-  <script src="app.js?v=3"></script>
+  <script src="supabase.js?v=2"></script>
+  <script src="dateEngine.js?v=4"></script>
+  <script src="addClient.js?v=5"></script>
+  <script src="gantt.js?v=5"></script>
+  <script src="app.js?v=5"></script>
 </body>
 </html>

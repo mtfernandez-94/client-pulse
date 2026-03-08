@@ -11,11 +11,11 @@
 
 function buildField(id, def) {
   const label = def.label || id;
-  const note  = def.note ? `<p class="text-[11px] text-stone-400 mt-1">${def.note}</p>` : '';
-  const req   = def.required ? '<span class="text-rose-400 ml-0.5">*</span>' : '';
+  const note  = def.note ? `<p class="text-[11px] text-[#4a5568] mt-1">${def.note}</p>` : '';
+  const req   = def.required ? '<span class="text-indigo-400 ml-0.5">*</span>' : '';
 
   let input = '';
-  const inputCls = 'w-full border border-stone-200 rounded-lg px-3 py-2.5 text-[13px] text-gray-900 focus:ring-2 focus:ring-stone-900/10 focus:border-stone-400 outline-none transition-colors bg-white placeholder-stone-400';
+  const inputCls = 'input-dark w-full bg-[#0a0d13] border border-white/[0.08] rounded-xl px-3 py-2.5 text-[13px] text-[#e2e8f0] focus:outline-none transition-all placeholder-[#4a5568]';
 
   switch (def.type) {
     case 'string':
@@ -26,7 +26,7 @@ function buildField(id, def) {
         ? `<option value="" disabled selected>Select…</option>`
         : `<option value="">None</option>`;
       const opts = (def.options || []).map(o => `<option value="${o}">${o}</option>`).join('');
-      input = `<select id="${id}" class="${inputCls} bg-white">${defaultOpt}${opts}</select>`;
+      input = `<select id="${id}" class="${inputCls}">${defaultOpt}${opts}</select>`;
       break;
     }
     case 'number':
@@ -38,8 +38,8 @@ function buildField(id, def) {
     case 'boolean':
       return `
         <div class="flex items-center gap-3 py-2">
-          <input type="checkbox" id="${id}" class="w-4 h-4 rounded border-stone-300 text-gray-900 focus:ring-stone-900/20" ${def.default ? 'checked' : ''}>
-          <label for="${id}" class="text-[13px] font-medium text-stone-600">${label}${req}</label>
+          <input type="checkbox" id="${id}" class="w-4 h-4 rounded border-white/[0.15] bg-[#0a0d13] text-indigo-500 focus:ring-indigo-500/20" ${def.default ? 'checked' : ''}>
+          <label for="${id}" class="text-[13px] font-medium text-[#8892a8]">${label}${req}</label>
           ${note}
         </div>`;
     default:
@@ -48,7 +48,7 @@ function buildField(id, def) {
 
   return `
     <div>
-      <label for="${id}" class="block text-[12px] font-medium text-stone-500 mb-1">${label}${req}</label>
+      <label for="${id}" class="block text-[12px] font-medium text-[#64748b] mb-1">${label}${req}</label>
       ${input}
       ${note}
     </div>`;
@@ -63,26 +63,26 @@ function renderAddModal() {
   const modal = document.getElementById('add-client-modal');
 
   modal.innerHTML = `
-    <div class="fixed inset-0 bg-black/30 backdrop-blur-sm z-40" onclick="closeModal()"></div>
+    <div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" onclick="closeModal()"></div>
     <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden ring-1 ring-stone-200/50">
+      <div class="modal-panel rounded-2xl w-full max-w-lg max-h-[90vh] overflow-hidden">
 
         <div class="px-6 pt-6 pb-4 flex items-center justify-between">
-          <h2 class="text-base font-semibold text-gray-900">Add New Client</h2>
-          <button onclick="closeModal()" class="text-stone-400 hover:text-stone-600 text-lg leading-none transition-colors">&times;</button>
+          <h2 class="text-base font-semibold text-white">Add New Client</h2>
+          <button onclick="closeModal()" class="text-[#4a5568] hover:text-[#8892a8] text-lg leading-none transition-colors">&times;</button>
         </div>
 
         <div class="px-6 py-4 overflow-y-auto max-h-[65vh] space-y-6">
 
           <div>
-            <h3 class="text-[11px] font-semibold text-stone-400 uppercase tracking-widest mb-3">Client</h3>
+            <h3 class="text-[11px] font-semibold text-[#4a5568] uppercase tracking-widest mb-3 font-mono">Client</h3>
             <div class="space-y-3">
               ${buildField('add-name', f.name)}
             </div>
           </div>
 
           <div>
-            <h3 class="text-[11px] font-semibold text-stone-400 uppercase tracking-widest mb-3">Contract</h3>
+            <h3 class="text-[11px] font-semibold text-[#4a5568] uppercase tracking-widest mb-3 font-mono">Contract</h3>
             <div class="grid grid-cols-2 gap-3">
               ${buildField('add-term', f.contract.fields.term)}
               ${buildField('add-bonus', f.contract.fields.bonus_term)}
@@ -90,7 +90,7 @@ function renderAddModal() {
           </div>
 
           <div>
-            <h3 class="text-[11px] font-semibold text-stone-400 uppercase tracking-widest mb-3">Payment</h3>
+            <h3 class="text-[11px] font-semibold text-[#4a5568] uppercase tracking-widest mb-3 font-mono">Payment</h3>
             <div class="grid grid-cols-2 gap-3">
               ${buildField('add-period', f.payment.fields.period)}
               ${buildField('add-processor', f.payment.fields.processor)}
@@ -103,18 +103,18 @@ function renderAddModal() {
           </div>
 
           <div>
-            <h3 class="text-[11px] font-semibold text-stone-400 uppercase tracking-widest mb-3">Dates</h3>
+            <h3 class="text-[11px] font-semibold text-[#4a5568] uppercase tracking-widest mb-3 font-mono">Dates</h3>
             <div class="grid grid-cols-2 gap-3">
               ${buildField('add-client-start', f.dates.fields.client_start)}
               ${buildField('add-program-start', f.dates.fields.program_start)}
             </div>
           </div>
 
-          <div id="add-error" class="text-red-500 text-sm hidden"></div>
+          <div id="add-error" class="text-red-400 text-sm hidden"></div>
         </div>
 
-        <div class="px-6 py-4 border-t border-stone-100 flex justify-end">
-          <button onclick="submitNewClient()" class="px-5 py-2 text-[13px] font-semibold text-white bg-gray-900 hover:bg-gray-800 rounded-lg transition-all shadow-sm">
+        <div class="px-6 py-4 border-t border-white/[0.06] flex justify-end">
+          <button onclick="submitNewClient()" class="btn-primary px-5 py-2 text-[13px] font-semibold text-white rounded-lg cursor-pointer">
             Add Client
           </button>
         </div>
