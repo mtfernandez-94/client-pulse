@@ -58,7 +58,7 @@ function clientToRow(client, coachId) {
     coach_id:      coachId,
     name:          client.name,
     status:        client.status,
-    health:        client.health,
+    health:        client.health || '',
     payment:       client.payment || {},
     contract:      client.contract || {},
     dates:         client.dates || {},
