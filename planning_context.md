@@ -12,8 +12,9 @@ This file captures the key decisions from the planning conversation so Claude Co
 
 ### Architecture
 - **Schema-driven design**: schema.json is the single source of truth. Adding a field to the schema should automatically update the UI. This was the student's #1 requirement — "everything should be tweakable without anything breaking."
-- **Local-first**: JSON file storage, no database, no hosting costs. Runs on localhost or free static hosting.
-- **Modular code**: each feature in its own file. Date engine, pause system, reviews, gantt — all independent.
+- **Supabase backend**: PostgreSQL database with Row Level Security. Auth via email/password. Data filtered by `coach_id = auth.uid()`. Replaced original localStorage approach.
+- **Deployed**: GitHub Pages at `pulse.whytbelt.com` (custom domain via GoDaddy CNAME → `mtfernandez-94.github.io`). Auto-deploys on push to `main`.
+- **Modular code**: each feature in its own file. Date engine, pause system, reviews, gantt, supabase — all independent.
 
 ### Data decisions
 - **Two date fields**: client_start (never changes, tracks when they first signed up) and program_start (resets each term). The spreadsheet only had one date, which broke renewal tracking.
@@ -57,6 +58,7 @@ This file captures the key decisions from the planning conversation so Claude Co
 | CLAUDE.md | Project context for Claude Code — always loaded |
 | curriculum.md | Sprint-by-sprint lesson plan — Claude Code reads and follows this |
 | schema.json | Single source of truth for client data structure |
-| clients_seed.json | Real client data exported from spreadsheet (40 clients) |
+| clients_seed.json | Backup seed data (import fallback when Supabase is empty) |
+| supabase.js | Supabase client, auth functions, CRUD operations |
 | settings_reference.json | Allow/deny permissions reference |
 | planning_context.md | This file — decisions from the planning conversation |

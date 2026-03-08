@@ -438,6 +438,61 @@ function exportCSV() {
   URL.revokeObjectURL(url);
 }
 
+// ── JSON Backup Export ────────────────────────────────────────────────────────
+
+function exportBackupJSON() {
+  if (allClients.length === 0) { alert('No clients to export.'); return; }
+  const backup = {
+    schema_version: '1.0',
+    exported: new Date().toISOString(),
+    clients: allClients.map(c => {
+      const copy = { ...c };
+      delete copy.id; // strip Supabase row IDs — re-generated on import
+      return copy;
+    }),
+  };
+  const json = JSON.stringify(backup, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `client-pulse-backup-${todayISO()}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function importBackupJSON() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json';
+  input.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      const clients = data.clients;
+      if (!Array.isArray(clients) || clients.length === 0) {
+        alert('No clients found in backup file.'); return;
+      }
+      if (!confirm(`Import ${clients.length} clients from backup? This will add them to your account.`)) return;
+      const session = await sbGetSession();
+      if (!session) { alert('Not signed in.'); return; }
+      const imported = await sbSeedClients(clients, session.user.id);
+      allClients = allClients.concat(imported);
+      render();
+      renderStats();
+      alert(`Successfully imported ${imported.length} clients.`);
+    } catch (err) {
+      console.error('Import failed:', err);
+      alert('Import failed. Check the file format and try again.');
+    }
+  };
+  input.click();
+}
+
 // ── Events ────────────────────────────────────────────────────────────────────
 
 function setupEvents() {
@@ -471,6 +526,8 @@ function setupEvents() {
     renderGantt();
   });
   document.getElementById('btn-export-csv')?.addEventListener('click', exportCSV);
+  document.getElementById('btn-export-json')?.addEventListener('click', exportBackupJSON);
+  document.getElementById('btn-import-json')?.addEventListener('click', importBackupJSON);
 }
 
 function updateViewToggle() {
@@ -1190,7 +1247,7 @@ async function init() {
 
     // 3. One-time migration: if localStorage has data and Supabase is empty, auto-migrate
     const localRaw = localStorage.getItem('clientPulse_clients');
-    let supaClients = await sbLoadClients();
+    let supaClients = await sbLoadClients(session.user.id);
 
     if (localRaw && supaClients.length === 0) {
       try {

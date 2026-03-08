@@ -73,11 +73,10 @@ function clientToRow(client, coachId) {
 
 // ── Data CRUD ─────────────────────────────────────────────────────────────
 
-async function sbLoadClients() {
-  const { data, error } = await sb
-    .from('clients')
-    .select('*')
-    .order('name');
+async function sbLoadClients(coachId) {
+  let query = sb.from('clients').select('*').order('name');
+  if (coachId) query = query.eq('coach_id', coachId);
+  const { data, error } = await query;
   if (error) throw error;
   return (data || []).map(rowToClient);
 }
