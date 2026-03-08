@@ -1265,22 +1265,6 @@ async function init() {
 
     allClients = supaClients;
 
-    // 4. If still empty, offer to import seed data
-    if (allClients.length === 0) {
-      try {
-        const seedRes = await fetch('clients_seed.json');
-        const seedData = await seedRes.json();
-        if (seedData.clients && seedData.clients.length > 0) {
-          const doSeed = confirm('No clients found. Import sample data to get started?');
-          if (doSeed) {
-            allClients = await sbSeedClients(seedData.clients, session.user.id);
-          }
-        }
-      } catch (e) {
-        console.log('No seed file available, starting fresh.');
-      }
-    }
-
     // 5. Build health style maps from schema
     const healthOptions = schema.fields.health.options || [];
     HEALTH_ORDER = {};
