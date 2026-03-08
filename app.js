@@ -487,7 +487,7 @@ function importBackupJSON() {
       alert(`Successfully imported ${imported.length} clients.`);
     } catch (err) {
       console.error('Import failed:', err);
-      alert('Import failed. Check the file format and try again.');
+      alert('Import failed: ' + (err.message || JSON.stringify(err)));
     }
   };
   input.click();
