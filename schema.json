@@ -182,6 +182,17 @@
       "type": "string",
       "required": false,
       "label": "General Notes"
+    },
+    "client_notes": {
+      "type": "array",
+      "required": false,
+      "label": "Client Notes (Timestamped)",
+      "note": "Append-only log. Newest shown first. Supports markdown.",
+      "items": {
+        "id": "uuid — unique per note",
+        "date": "ISO timestamp — when the note was created",
+        "note": "string — supports **bold**, *italic*, - bullet lists"
+      }
     }
   }
 }

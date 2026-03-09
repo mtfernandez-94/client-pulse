@@ -12,7 +12,8 @@ let filterHealth = '';
 let filterTerm   = '';
 let sortCol = 'renewalUrgency';
 let sortDir = 'asc';
-let viewMode = 'table'; // 'table' | 'gantt'
+let viewMode = 'table'; // 'table' | 'gantt' | 'actions'
+let _lastAutoBackup = 0; // timestamp of last auto-backup
 
 // ── Style maps ────────────────────────────────────────────────────────────────
 // Health options come from schema; styles are UI-only and keyed by schema order.
@@ -177,6 +178,12 @@ function renderCell(client, col) {
 
     case 'date': {
       const val = getPath(client, col.key);
+      // Only program_start is inline-editable in the table
+      if (col.key === 'dates.program_start') {
+        return `<td class="${TD_MUTED} inline-date-cell" data-inline-date="${col.key}" data-idx="${idx}" data-val="${val || ''}">
+          ${fmt(parseDate(val))}<span class="edit-hint">✎</span>
+        </td>`;
+      }
       return `<td class="${TD_MUTED}">${fmt(parseDate(val))}</td>`;
     }
 
@@ -280,12 +287,25 @@ function render() {
   if (viewMode === 'gantt') {
     document.getElementById('table-wrap').classList.add('hidden');
     document.getElementById('gantt-wrap').classList.remove('hidden');
+    document.getElementById('actions-wrap').classList.add('hidden');
+    document.getElementById('btn-bulk-notes')?.classList.add('hidden');
     renderGantt();
+    return;
+  }
+
+  if (viewMode === 'actions') {
+    document.getElementById('table-wrap').classList.add('hidden');
+    document.getElementById('gantt-wrap').classList.add('hidden');
+    document.getElementById('actions-wrap').classList.remove('hidden');
+    document.getElementById('btn-bulk-notes')?.classList.add('hidden');
+    renderActionItems();
     return;
   }
 
   document.getElementById('table-wrap').classList.remove('hidden');
   document.getElementById('gantt-wrap').classList.add('hidden');
+  document.getElementById('actions-wrap').classList.add('hidden');
+  document.getElementById('btn-bulk-notes')?.classList.remove('hidden');
   const colspan = tableColumns.length;
   const tbody = document.getElementById('tbody');
 
@@ -511,31 +531,27 @@ function setupEvents() {
     filterTerm = e.target.value;
     render();
   });
-  document.getElementById('view-table')?.addEventListener('click', () => {
-    viewMode = 'table';
-    updateViewToggle();
-    document.getElementById('table-wrap').classList.remove('hidden');
-    document.getElementById('gantt-wrap').classList.add('hidden');
-    render();
-  });
-  document.getElementById('view-gantt')?.addEventListener('click', () => {
-    viewMode = 'gantt';
-    updateViewToggle();
-    document.getElementById('table-wrap').classList.add('hidden');
-    document.getElementById('gantt-wrap').classList.remove('hidden');
-    renderGantt();
-  });
+  document.getElementById('view-table')?.addEventListener('click', () => { viewMode = 'table'; render(); });
+  document.getElementById('view-gantt')?.addEventListener('click', () => { viewMode = 'gantt'; render(); });
+  document.getElementById('view-actions')?.addEventListener('click', () => { viewMode = 'actions'; render(); });
   document.getElementById('btn-export-csv')?.addEventListener('click', exportCSV);
-  document.getElementById('btn-export-json')?.addEventListener('click', exportBackupJSON);
   document.getElementById('btn-import-json')?.addEventListener('click', importBackupJSON);
+  document.getElementById('btn-bulk-notes')?.addEventListener('click', openBulkNotesModal);
+
+  // ── Inline date editing: event delegation on tbody ───────────────────────
+  document.getElementById('tbody')?.addEventListener('click', e => {
+    const td = e.target.closest('[data-inline-date]');
+    if (!td) return;
+    openInlineDatePicker(td);
+  });
 }
 
 function updateViewToggle() {
-  ['view-table', 'view-gantt'].forEach(id => {
+  const viewMap = { 'view-table': 'table', 'view-gantt': 'gantt', 'view-actions': 'actions' };
+  Object.entries(viewMap).forEach(([id, mode]) => {
     const btn = document.getElementById(id);
     if (!btn) return;
-    const isTable = id === 'view-table';
-    if ((isTable && viewMode === 'table') || (!isTable && viewMode === 'gantt')) {
+    if (viewMode === mode) {
       btn.classList.add('active');
       btn.classList.remove('text-[#64748b]');
     } else {
@@ -569,9 +585,17 @@ async function _flushSave() {
       const client = allClients[i];
       if (client && client.id) await sbSaveClient(client, coachId);
     }
+    // Dispatch event so other systems (auto-backup, toasts) can hook in
+    window.dispatchEvent(new CustomEvent('clientSaved', { detail: { indices } }));
+    // Auto-backup: throttled to at most once per 5 minutes
+    const now = Date.now();
+    if (now - _lastAutoBackup > 5 * 60 * 1000) {
+      _lastAutoBackup = now;
+      autoBackup();
+    }
   } catch (e) {
     console.error('Could not save to Supabase:', e);
-    alert('Warning: changes could not be saved. Check your internet connection.');
+    showToast('Could not save. Check connection.', 'error');
   }
 }
 
@@ -638,18 +662,25 @@ function submitReview(idx, reviewNum) {
   const client = allClients[idx];
   if (!client) return;
   const notes = document.getElementById('review-notes')?.value?.trim() || null;
-  const key = `review_${reviewNum}`;
+  const key   = `review_${reviewNum}`;
   client.reviews = client.reviews || {};
-  client.reviews[key] = {
-    ...client.reviews[key],
-    completed: true,
-    completed_date: todayISO(),
-    notes,
-  };
+  client.reviews[key] = { ...client.reviews[key], completed: true, completed_date: todayISO(), notes };
+
+  // Also save review notes to client_notes
+  if (notes) {
+    if (!client.client_notes) client.client_notes = [];
+    client.client_notes.push({
+      id:   crypto.randomUUID(),
+      date: new Date().toISOString(),
+      note: `**Review ${reviewNum} completed**\n${notes}`,
+    });
+  }
+
   saveClients(idx);
   closeModal();
   render();
   renderStats();
+  showToast(`Review ${reviewNum} marked complete`);
 }
 
 function openEditModal(idx) {
@@ -773,6 +804,23 @@ function openEditModal(idx) {
           </div>
           ` : ''}
 
+          <div>
+            <h3 class="text-[11px] font-semibold text-[#4a5568] uppercase tracking-widest mb-3 font-mono">Client Notes</h3>
+            <div class="flex gap-2 mb-3">
+              <input type="text" id="new-note-input" class="${inputCls}" placeholder="Add a note… (supports **bold**, *italic*, - bullets)">
+              <button type="button" onclick="addNoteFromModal(${idx})" class="btn-primary px-3 py-2 text-[13px] font-semibold text-white rounded-lg whitespace-nowrap">Add</button>
+            </div>
+            <ul class="space-y-3 max-h-48 overflow-y-auto pr-1">
+              ${(client.client_notes && client.client_notes.length > 0)
+                ? [...client.client_notes].reverse().map(n => `
+                  <li class="border-b border-white/[0.04] pb-2 last:border-0">
+                    <div class="text-[11px] text-[#4a5568] font-mono mb-1">${new Date(n.date).toLocaleDateString('en-AU', {day:'numeric',month:'short',year:'2-digit',hour:'2-digit',minute:'2-digit'})}</div>
+                    <div class="note-body text-[13px] text-[#8892a8]">${markdownToHtml(n.note)}</div>
+                  </li>`).join('')
+                : '<li class="text-[#4a5568] text-[13px] font-mono">No notes yet.</li>'}
+            </ul>
+          </div>
+
         </div>
         <div class="px-6 py-4 border-t border-white/[0.06] flex justify-between items-center">
           <div class="flex items-center gap-2">
@@ -793,6 +841,13 @@ function openEditModal(idx) {
         </div>
       </div>
     </div>`;
+  // Init Flatpickr on all date inputs in this modal
+  if (window.flatpickr) {
+    ['edit-client-start','edit-program-start'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) flatpickr(el, FP_CFG);
+    });
+  }
 }
 
 function saveEdit(idx) {
@@ -825,6 +880,7 @@ function saveEdit(idx) {
   closeModal();
   render();
   renderStats();
+  showToast(`${c.name} saved`);
 }
 
 // ── Pause / Resume ─────────────────────────────────────────────────────────────
@@ -1028,19 +1084,31 @@ function openRenewalModal(idx) {
         <div class="px-6 py-5 space-y-4">
           <div>
             <label class="block text-[12px] font-medium text-[#64748b] mb-1">Outcome</label>
-            <select id="renewal-outcome" class="${inputCls}">
+            <select id="renewal-outcome" class="${inputCls}" onchange="toggleRenewalFields()">
               <option value="renewed">Renewed</option>
               <option value="churned">Churned</option>
               <option value="paused">Paused</option>
             </select>
           </div>
-          <div id="renewal-program-start-wrap">
-            <label class="block text-[12px] font-medium text-[#64748b] mb-1">New program start (new term)</label>
-            <input type="date" id="renewal-program-start" class="${inputCls}" value="${client.dates?.program_start || ''}">
+          <div id="renewal-renewed-fields" class="space-y-4">
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-[12px] font-medium text-[#64748b] mb-1">New Term</label>
+                <select id="renewal-term" class="${inputCls}">
+                  ${(schemaCache?.fields?.contract?.fields?.term?.options || []).map(o =>
+                    `<option value="${o}" ${o === client.contract?.term ? 'selected' : ''}>${o}</option>`
+                  ).join('')}
+                </select>
+              </div>
+              <div>
+                <label class="block text-[12px] font-medium text-[#64748b] mb-1">New Program Start</label>
+                <input type="text" id="renewal-program-start" class="${inputCls}" placeholder="Select date…">
+              </div>
+            </div>
           </div>
           <div>
-            <label class="block text-[12px] font-medium text-[#64748b] mb-1">Notes (optional)</label>
-            <input type="text" id="renewal-notes" class="${inputCls}" placeholder="e.g. upgraded to 12mth">
+            <label class="block text-[12px] font-medium text-[#64748b] mb-1">Notes → saved to Client Notes</label>
+            <textarea id="renewal-notes" rows="3" class="${inputCls} resize-none" placeholder="e.g. upgraded to 12mth, keen to keep going…"></textarea>
           </div>
         </div>
         <div class="px-6 py-4 border-t border-white/[0.06] flex justify-end gap-2">
@@ -1049,27 +1117,51 @@ function openRenewalModal(idx) {
         </div>
       </div>
     </div>`;
+  // Init Flatpickr on new program start field
+  if (window.flatpickr) {
+    flatpickr('#renewal-program-start', { ...FP_CFG, defaultDate: client.dates?.program_start || null });
+  }
+  // Wire outcome toggle
+  toggleRenewalFields();
+}
+
+function toggleRenewalFields() {
+  const outcome = document.getElementById('renewal-outcome')?.value;
+  const wrap    = document.getElementById('renewal-renewed-fields');
+  if (wrap) wrap.classList.toggle('hidden', outcome !== 'renewed');
 }
 
 function submitRenewal(idx) {
-  const client = allClients[idx];
+  const client       = allClients[idx];
   if (!client) return;
-  const outcome = document.getElementById('renewal-outcome')?.value || 'renewed';
-  const notes = document.getElementById('renewal-notes')?.value?.trim() || null;
+  const outcome      = document.getElementById('renewal-outcome')?.value || 'renewed';
+  const notes        = document.getElementById('renewal-notes')?.value?.trim() || null;
   const programStart = document.getElementById('renewal-program-start')?.value || null;
-  client.renewal = {
-    status: outcome,
-    actioned_date: todayISO(),
-    notes,
-  };
-  if (outcome === 'renewed' && programStart) {
-    client.dates = client.dates || {};
-    client.dates.program_start = programStart;
+  const term         = document.getElementById('renewal-term')?.value || null;
+
+  client.renewal = { status: outcome, actioned_date: todayISO(), notes: null };
+
+  if (outcome === 'renewed') {
+    if (programStart) { client.dates = client.dates || {}; client.dates.program_start = programStart; }
+    if (term)           client.contract = { ...client.contract, term };
   }
+
+  // Save renewal notes to client_notes as a timestamped entry
+  if (notes) {
+    if (!client.client_notes) client.client_notes = [];
+    const termLabel = outcome === 'renewed' && term ? ` · ${term}` : '';
+    client.client_notes.push({
+      id:   crypto.randomUUID(),
+      date: new Date().toISOString(),
+      note: `**Renewal: ${outcome}${termLabel}**\n${notes}`,
+    });
+  }
+
   saveClients(idx);
   closeModal();
   render();
   renderStats();
+  showToast(`Renewal saved — ${outcome}`);
 }
 
 // ── Archive / Reactivate ──────────────────────────────────────────────────────
@@ -1136,6 +1228,319 @@ function submitReactivate(idx) {
   closeModal();
   render();
   renderStats();
+}
+
+// ── Toast notifications ────────────────────────────────────────────────────────
+
+function showToast(msg, type = 'success') {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  container.appendChild(el);
+  setTimeout(() => {
+    el.classList.add('fade-out');
+    el.addEventListener('animationend', () => el.remove(), { once: true });
+  }, 2800);
+}
+
+// ── Markdown → safe HTML ──────────────────────────────────────────────────────
+
+function markdownToHtml(text) {
+  if (!text) return '';
+  let s = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  s = s.replace(/((?:^- .+\n?)+)/gm, match => {
+    const items = match.trim().split('\n').map(l => `<li>${l.replace(/^- /, '')}</li>`).join('');
+    return `<ul>${items}</ul>`;
+  });
+  s = s.replace(/\n/g, '<br>');
+  return s;
+}
+
+// ── Client notes helpers ───────────────────────────────────────────────────────
+
+function addNoteFromModal(idx) {
+  const input = document.getElementById('new-note-input');
+  if (!input) return;
+  const text = input.value.trim();
+  if (!text) return;
+  const client = allClients[idx];
+  if (!client) return;
+  if (!client.client_notes) client.client_notes = [];
+  client.client_notes.push({ id: crypto.randomUUID(), date: new Date().toISOString(), note: text });
+  saveClients(idx);
+  showToast('Note added');
+  openEditModal(idx);
+}
+
+// ── Auto-backup to localStorage ────────────────────────────────────────────────
+
+function autoBackup() {
+  if (allClients.length === 0) return;
+  try {
+    const key  = `clientPulse_backup_${todayISO()}`;
+    const data = JSON.stringify({ schema_version: '1.0', backed_up: new Date().toISOString(), clients: allClients });
+    localStorage.setItem(key, data);
+    const keys = Object.keys(localStorage).filter(k => k.startsWith('clientPulse_backup_')).sort();
+    if (keys.length > 5) keys.slice(0, keys.length - 5).forEach(k => localStorage.removeItem(k));
+    const el = document.getElementById('backup-status');
+    if (el) {
+      el.textContent = `✓ ${new Date().toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })}`;
+      el.classList.remove('hidden');
+    }
+  } catch (e) { console.warn('Auto-backup failed:', e); }
+}
+
+// ── Flatpickr helpers ──────────────────────────────────────────────────────────
+
+const FP_CFG = { dateFormat: 'Y-m-d', disableMobile: true };
+
+function initAllModalDatepickers() {
+  if (!window.flatpickr) return;
+  document.querySelectorAll('#add-client-modal input[type="date"]').forEach(el => {
+    flatpickr(el, FP_CFG);
+  });
+}
+
+// ── Inline date picker (table cell click) ─────────────────────────────────────
+
+function openInlineDatePicker(td) {
+  if (!window.flatpickr) return;
+  const field = td.dataset.inlineDate;
+  const idx   = parseInt(td.dataset.idx, 10);
+  const val   = td.dataset.val || '';
+  const origHTML = td.innerHTML;
+
+  const input = document.createElement('input');
+  input.type  = 'text';
+  input.style.cssText = 'width:0;height:0;opacity:0;position:absolute;pointer-events:none;';
+  td.innerHTML = '';
+  td.appendChild(input);
+
+  const fp = flatpickr(input, {
+    ...FP_CFG,
+    defaultDate: val || null,
+    onClose(selectedDates, dateStr) {
+      if (dateStr && dateStr !== val) {
+        const parts = field.split('.');
+        let obj = allClients[idx];
+        for (let i = 0; i < parts.length - 1; i++) {
+          obj[parts[i]] = obj[parts[i]] || {};
+          obj = obj[parts[i]];
+        }
+        obj[parts[parts.length - 1]] = dateStr;
+        saveClients(idx);
+        showToast('Date updated');
+        render();
+      } else {
+        td.innerHTML = origHTML;
+        fp.destroy();
+      }
+    },
+  });
+  fp.open();
+}
+
+// ── Action Items view ─────────────────────────────────────────────────────────
+
+function renderActionItems() {
+  const today       = getToday();
+  const weekFromNow = addDays(today, 7);
+  const active      = allClients
+    .map((c, i) => ({ ...c, _idx: i, _health: normaliseHealth(c.health) }))
+    .filter(c => c.status === 'active');
+
+  const attention  = active.filter(c => c._health === '🚩 Attention');
+  const cruising   = active.filter(c => c._health === '🔸 Cruising');
+  const renewalsDue = active.filter(c => renewalFlag(c, termToDays, bonusToDays));
+
+  const overdueReviews = [], weekReviews = [];
+  active.forEach(c => {
+    calculateReviews(c, termToDays, bonusToDays).forEach(r => {
+      if (r.completed) return;
+      if (r.date < today) overdueReviews.push({ c, r });
+      else if (r.date <= weekFromNow) weekReviews.push({ c, r });
+    });
+  });
+
+  function clientRow(c, sub) {
+    const hc = GANTT_BAR_COLOR[c._health] || GANTT_DEFAULT_COLOR;
+    return `<div class="flex items-center justify-between py-2.5 border-b border-white/[0.04] last:border-0 cursor-pointer hover:bg-white/[0.03] rounded-lg px-2 -mx-2 transition-colors" onclick="openEditModal(${c._idx})">
+      <div class="flex items-center gap-2.5 min-w-0">
+        <div class="w-1.5 h-1.5 rounded-full flex-shrink-0" style="background:${hc.border};box-shadow:0 0 6px ${hc.border}80;"></div>
+        <span class="text-[13px] font-medium text-[#e2e8f0] truncate">${c.name}</span>
+      </div>
+      ${sub ? `<span class="text-[11px] text-[#64748b] font-mono ml-3 flex-shrink-0">${sub}</span>` : ''}
+    </div>`;
+  }
+
+  function card(title, icon, count, rows, danger) {
+    const cc = count > 0 ? (danger ? 'text-rose-400' : 'text-amber-400') : 'text-[#4a5568]';
+    return `<div class="glass rounded-2xl p-5 depth-1">
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-2">
+          <span>${icon}</span>
+          <h3 class="text-[13px] font-semibold text-white">${title}</h3>
+        </div>
+        <span class="text-[13px] font-mono font-bold ${cc}">${count}</span>
+      </div>
+      ${rows || '<p class="text-[13px] text-[#4a5568] font-mono">All clear ✓</p>'}
+    </div>`;
+  }
+
+  document.getElementById('actions-inner').innerHTML = `
+    <div class="flex items-center gap-3 mb-5">
+      <h2 class="text-base font-bold text-white">Action Items</h2>
+      <span class="text-[12px] text-[#4a5568] font-mono">${getToday().toLocaleDateString('en-AU',{weekday:'short',day:'numeric',month:'short'})}</span>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      ${card('Flagged for Attention','🚩',attention.length, attention.map(c=>clientRow(c,'')).join(''), true)}
+      ${card('Overdue Reviews','⚠️',overdueReviews.length, overdueReviews.map(({c,r})=>clientRow(c,`R${r.reviewNum} · ${Math.abs(Math.round((r.date-today)/86400000))}d overdue`)).join(''), true)}
+      ${card('Renewals Due','🔄',renewalsDue.length, renewalsDue.map(c=>{
+        const rc=renewContact(c,termToDays,bonusToDays);
+        const d=rc?Math.round((rc-today)/86400000):null;
+        return clientRow(c, d!==null?(d<0?`${Math.abs(d)}d overdue`:`in ${d}d`):'');
+      }).join(''), true)}
+      ${card('Reviews This Week','📅',weekReviews.length, weekReviews.map(({c,r})=>clientRow(c,`R${r.reviewNum} · ${fmt(r.date)}`)).join(''), false)}
+      ${card('Cruising','🔸',cruising.length, cruising.map(c=>clientRow(c,'→ send encouragement')).join(''), false)}
+    </div>`;
+}
+
+// ── Bulk Notes (Gemini) ───────────────────────────────────────────────────────
+
+function openBulkNotesModal() {
+  const modal = document.getElementById('add-client-modal');
+  if (!modal) return;
+  modal.classList.remove('hidden');
+  const storedKey = localStorage.getItem('cp_gemini_key') || '';
+  const inputCls  = 'input-dark w-full bg-[#0a0d13] border border-white/[0.08] rounded-xl px-3 py-2.5 text-[13px] text-[#e2e8f0] focus:outline-none transition-all placeholder-[#4a5568]';
+
+  modal.innerHTML = `
+    <div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" onclick="closeModal()"></div>
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div class="modal-panel rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden border border-white/[0.06]">
+        <div class="px-6 pt-6 pb-4 flex items-center justify-between">
+          <div>
+            <h2 class="text-base font-semibold text-white">Bulk Notes Update</h2>
+            <p class="text-[12px] text-[#4a5568] mt-0.5">Dictate notes for multiple clients — AI detects who each note is about.</p>
+          </div>
+          <button type="button" onclick="closeModal()" class="text-[#4a5568] hover:text-[#8892a8] text-lg transition-colors">&times;</button>
+        </div>
+        <div class="px-6 py-4 overflow-y-auto max-h-[65vh] space-y-4">
+          ${storedKey
+            ? `<div class="flex items-center justify-between p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                <span class="text-[12px] text-emerald-400">✓ Gemini API key configured</span>
+                <button onclick="localStorage.removeItem('cp_gemini_key');openBulkNotesModal();" class="text-[11px] text-[#4a5568] hover:text-rose-400 transition-colors">Remove</button>
+               </div>`
+            : `<div class="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 space-y-2">
+                <p class="text-[12px] text-amber-400 font-medium">Gemini API key required (free at aistudio.google.com)</p>
+                <input type="text" id="bulk-gemini-key" placeholder="Paste API key here" class="${inputCls}">
+                <p class="text-[11px] text-[#4a5568]">Stored in your browser only. Never sent anywhere except Gemini.</p>
+               </div>`}
+          <div>
+            <label class="block text-[12px] font-medium text-[#64748b] mb-1.5">Your dictation</label>
+            <textarea id="bulk-notes-text" rows="5" class="${inputCls} resize-none" style="height:auto;"
+              placeholder="e.g. Lee crushing it — up 5 pullups. Claire needs to focus on squat depth. Andreas doing well but form slipping on last sets."></textarea>
+          </div>
+          <div id="bulk-preview" class="hidden space-y-2">
+            <h3 class="text-[11px] font-semibold text-[#4a5568] uppercase tracking-widest font-mono">Parsed — confirm before saving</h3>
+            <div id="bulk-preview-list" class="space-y-2"></div>
+          </div>
+          <div id="bulk-error" class="hidden text-rose-400 text-[13px] p-3 rounded-lg bg-rose-500/10 border border-rose-500/20"></div>
+        </div>
+        <div class="px-6 py-4 border-t border-white/[0.06] flex justify-end gap-2">
+          <button type="button" onclick="closeModal()" class="px-3.5 py-2 text-[13px] font-medium text-[#64748b] hover:text-[#e2e8f0] transition-colors">Cancel</button>
+          <button type="button" id="btn-parse-notes" onclick="parseBulkNotes()" class="btn-secondary px-4 py-2 text-[13px] font-medium text-[#8892a8] rounded-lg cursor-pointer">Parse with AI</button>
+          <button type="button" id="btn-confirm-bulk" onclick="confirmBulkNotes()" class="btn-primary px-5 py-2 text-[13px] font-semibold text-white rounded-lg hidden">Add Notes</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function parseBulkNotes() {
+  const text     = document.getElementById('bulk-notes-text')?.value?.trim();
+  const keyInput = document.getElementById('bulk-gemini-key');
+  const errorEl  = document.getElementById('bulk-error');
+  const parseBtn = document.getElementById('btn-parse-notes');
+  errorEl.classList.add('hidden');
+
+  if (keyInput?.value?.trim()) localStorage.setItem('cp_gemini_key', keyInput.value.trim());
+  const apiKey = localStorage.getItem('cp_gemini_key');
+  if (!apiKey) { errorEl.textContent = 'Enter your Gemini API key first.'; errorEl.classList.remove('hidden'); return; }
+  if (!text)   { errorEl.textContent = 'Enter some notes to parse.';        errorEl.classList.remove('hidden'); return; }
+
+  parseBtn.textContent = 'Parsing…';
+  parseBtn.disabled    = true;
+
+  const names  = allClients.map(c => c.name);
+  const prompt = `Parse this coaching note text and attribute each note to the correct client from the list.
+Client list: ${names.join(', ')}
+Text: "${text}"
+Return ONLY a JSON array: [{"client":"exact name","note":"their note"}]
+- Match names fuzzily (nicknames, first names ok).
+- If ambiguous, use null for client.
+- Only include clients mentioned.
+JSON array only:`;
+
+  try {
+    const res  = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ contents:[{parts:[{text:prompt}]}] }) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error?.message || 'Gemini API error');
+    const raw   = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const match = raw.match(/\[[\s\S]*\]/);
+    if (!match) throw new Error('Could not parse AI response. Try rephrasing your notes.');
+    const parsed = JSON.parse(match[0]);
+
+    window._bulkPayload = parsed.map(item => {
+      const name = (item.client || '').toLowerCase();
+      const idx  = allClients.findIndex(c =>
+        c.name.toLowerCase() === name ||
+        c.name.toLowerCase().includes(name) ||
+        name.includes(c.name.split(' ')[0].toLowerCase())
+      );
+      return { ...item, idx, matched: idx !== -1 };
+    });
+
+    document.getElementById('bulk-preview').classList.remove('hidden');
+    document.getElementById('btn-confirm-bulk').classList.remove('hidden');
+    document.getElementById('bulk-preview-list').innerHTML = window._bulkPayload.map((item, i) => {
+      const label = item.matched ? allClients[item.idx].name : (item.client || 'Unknown — no match');
+      const cls   = item.matched ? 'border-emerald-500/20 bg-emerald-500/5' : 'border-rose-500/20 bg-rose-500/5';
+      const nc    = item.matched ? 'text-emerald-400' : 'text-rose-400';
+      return `<div class="p-3 rounded-lg border ${cls} flex items-start gap-3">
+        <div class="flex-1 min-w-0">
+          <div class="text-[12px] font-semibold ${nc} mb-1">${label}</div>
+          <div class="text-[13px] text-[#8892a8]">${item.note}</div>
+        </div>
+        <button onclick="window._bulkPayload.splice(${i},1);this.closest('div[class*=rounded]').remove();" class="text-[#4a5568] hover:text-rose-400 text-sm transition-colors flex-shrink-0 mt-0.5">✕</button>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    errorEl.textContent = e.message || 'Parsing failed.';
+    errorEl.classList.remove('hidden');
+  } finally {
+    parseBtn.textContent = 'Parse with AI';
+    parseBtn.disabled    = false;
+  }
+}
+
+function confirmBulkNotes() {
+  const payload = (window._bulkPayload || []).filter(item => item.matched);
+  if (!payload.length) { showToast('No matched clients', 'info'); return; }
+  payload.forEach(item => {
+    const client = allClients[item.idx];
+    if (!client) return;
+    if (!client.client_notes) client.client_notes = [];
+    client.client_notes.push({ id: crypto.randomUUID(), date: new Date().toISOString(), note: item.note });
+    saveClients(item.idx);
+  });
+  closeModal();
+  showToast(`Notes added to ${payload.length} client${payload.length !== 1 ? 's' : ''}`);
+  window._bulkPayload = null;
 }
 
 // ── Auth handlers ─────────────────────────────────────────────────────────────
@@ -1301,6 +1706,8 @@ async function init() {
     renderStats();
     setupEvents();
     render();
+    // Initial backup on session start
+    setTimeout(autoBackup, 3000);
   } catch (e) {
     console.error('Init error:', e);
     const tbody = document.getElementById('tbody');

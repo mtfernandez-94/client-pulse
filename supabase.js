@@ -50,6 +50,7 @@ function rowToClient(row) {
     renewal:       row.renewal || { status: 'pending' },
     pause_history: row.pause_history || [],
     notes:         row.notes || '',
+    client_notes:  row.client_notes || [],
   };
 }
 
@@ -66,6 +67,7 @@ function clientToRow(client, coachId) {
     renewal:       client.renewal || { status: 'pending' },
     pause_history: client.pause_history || [],
     notes:         client.notes || '',
+    client_notes:  client.client_notes || [],
   };
   if (client.id) row.id = client.id;
   return row;

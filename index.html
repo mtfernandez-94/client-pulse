@@ -194,6 +194,77 @@
       background: linear-gradient(180deg, rgba(255,255,255,0.03), transparent);
     }
 
+    /* ── Sticky table header ──────────────────────────────────────────── */
+    #thead {
+      position: sticky;
+      top: 57px; /* height of app header */
+      z-index: 5;
+      background: #0a0d13;
+    }
+
+    /* ── Flatpickr dark theme overrides ──────────────────────────────── */
+    .flatpickr-calendar {
+      background: #181d2b !important;
+      border: 1px solid rgba(255,255,255,0.08) !important;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5) !important;
+      border-radius: 12px !important;
+    }
+    .flatpickr-day { color: #e2e8f0 !important; border-radius: 6px !important; }
+    .flatpickr-day:hover { background: rgba(129,140,248,0.15) !important; }
+    .flatpickr-day.selected { background: #6366f1 !important; border-color: #6366f1 !important; }
+    .flatpickr-day.today { border-color: rgba(129,140,248,0.5) !important; }
+    .flatpickr-months .flatpickr-month { color: #e2e8f0 !important; }
+    .flatpickr-current-month { color: #e2e8f0 !important; }
+    .flatpickr-current-month .flatpickr-monthDropdown-months { color: #e2e8f0 !important; background: #181d2b !important; }
+    .flatpickr-weekday { color: #64748b !important; }
+    .flatpickr-prev-month svg, .flatpickr-next-month svg { fill: #8892a8 !important; }
+    .numInputWrapper span { border-color: rgba(255,255,255,0.08) !important; }
+    .numInputWrapper span svg { fill: #8892a8 !important; }
+    .numInput { color: #e2e8f0 !important; background: transparent !important; }
+    .flatpickr-day.flatpickr-disabled { color: #2d3748 !important; }
+
+    /* ── Toast notifications ─────────────────────────────────────────── */
+    #toast-container {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 999;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: none;
+    }
+    .toast {
+      background: linear-gradient(145deg, rgba(24,29,43,0.97), rgba(24,29,43,0.9));
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px;
+      padding: 10px 16px;
+      font-size: 13px;
+      font-weight: 500;
+      color: #e2e8f0;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+      animation: toast-in 0.2s ease forwards;
+      pointer-events: auto;
+    }
+    .toast.success { border-left: 3px solid #34d399; }
+    .toast.error   { border-left: 3px solid #f87171; }
+    .toast.info    { border-left: 3px solid #818cf8; }
+    .toast.fade-out { animation: toast-out 0.3s ease forwards; }
+    @keyframes toast-in  { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes toast-out { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(8px); } }
+
+    /* ── Client notes markdown rendering ─────────────────────────────── */
+    .note-body strong { color: #e2e8f0; font-weight: 600; }
+    .note-body em     { color: #8892a8; font-style: italic; }
+    .note-body ul     { list-style: disc; margin-left: 16px; margin-top: 4px; }
+    .note-body li     { color: #8892a8; font-size: 12px; margin-bottom: 2px; }
+
+    /* ── Inline date cell ─────────────────────────────────────────────── */
+    .inline-date-cell { cursor: pointer; }
+    .inline-date-cell:hover { color: #818cf8; }
+    .inline-date-cell:hover .edit-hint { opacity: 1; }
+    .edit-hint { opacity: 0; transition: opacity 0.15s; font-size: 10px; color: #4a5568; margin-left: 4px; }
+
     /* ── Gantt tooltip ───────────────────────────────────────────────── */
     .gantt-dot { position: absolute; }
     .gantt-tooltip {
@@ -361,8 +432,8 @@
       </div>
       <div class="flex items-center gap-2.5">
         <button id="btn-import-json" class="btn-secondary px-4 py-2 text-[13px] font-medium text-[#8892a8] rounded-lg cursor-pointer">Import</button>
-        <button id="btn-export-json" class="btn-secondary px-4 py-2 text-[13px] font-medium text-[#8892a8] rounded-lg cursor-pointer">Backup</button>
         <button id="btn-export-csv" class="btn-secondary px-4 py-2 text-[13px] font-medium text-[#8892a8] rounded-lg cursor-pointer">Export CSV</button>
+        <span id="backup-status" class="text-[11px] text-[#4a5568] font-mono hidden">✓ Backed up</span>
         <button id="btn-add-client" class="btn-primary px-4 py-2 text-[13px] font-semibold text-white rounded-lg cursor-pointer">+ Add Client</button>
         <button id="btn-sign-out" class="px-3 py-2 text-[13px] font-medium text-[#4a5568] hover:text-[#8892a8] transition-colors cursor-pointer">Sign Out</button>
       </div>
@@ -396,9 +467,12 @@
 
       <!-- View toggle -->
       <div class="flex items-center gap-0.5 bg-white/[0.02] rounded-lg p-0.5 border border-white/[0.04] depth-1">
-        <button id="view-table" class="filter-pill px-3.5 py-1.5 rounded-md text-[13px] font-medium text-[#64748b] cursor-pointer">Table</button>
-        <button id="view-gantt" class="filter-pill px-3.5 py-1.5 rounded-md text-[13px] font-medium text-[#64748b] cursor-pointer">Gantt</button>
+        <button id="view-table"   class="filter-pill px-3.5 py-1.5 rounded-md text-[13px] font-medium text-[#64748b] cursor-pointer">Table</button>
+        <button id="view-gantt"   class="filter-pill px-3.5 py-1.5 rounded-md text-[13px] font-medium text-[#64748b] cursor-pointer">Gantt</button>
+        <button id="view-actions" class="filter-pill px-3.5 py-1.5 rounded-md text-[13px] font-medium text-[#64748b] cursor-pointer">Actions</button>
       </div>
+      <!-- Bulk Notes button (only shown in table view) -->
+      <button id="btn-bulk-notes" class="btn-secondary px-3.5 py-1.5 text-[13px] font-medium text-[#8892a8] rounded-lg cursor-pointer hidden">Bulk Notes</button>
       <div id="row-count" class="ml-auto text-[13px] text-[#4a5568] font-mono font-medium"></div>
     </div>
 
@@ -419,17 +493,27 @@
       <div id="gantt-inner" class="min-w-full"></div>
     </div>
 
+    <!-- ── Action Items view ───────────────────────────────────────── -->
+    <div id="actions-wrap" class="hidden px-8 py-6">
+      <div id="actions-inner"></div>
+    </div>
+
     <!-- ── Modal container ─────────────────────────────────────────── -->
     <div id="add-client-modal" class="hidden"></div>
 
   </div><!-- /app-container -->
 
+  <!-- ── Toast container ─────────────────────────────────────────────── -->
+  <div id="toast-container"></div>
+
   <!-- Scripts: Supabase CDN first, then app modules -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase.js?v=2"></script>
+  <script src="supabase.js?v=3"></script>
   <script src="dateEngine.js?v=4"></script>
-  <script src="addClient.js?v=5"></script>
+  <script src="addClient.js?v=6"></script>
   <script src="gantt.js?v=5"></script>
-  <script src="app.js?v=5"></script>
+  <script src="app.js?v=6"></script>
 </body>
 </html>

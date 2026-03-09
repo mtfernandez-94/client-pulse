@@ -211,6 +211,13 @@ function openAddClientModal() {
   const modal = document.getElementById('add-client-modal');
   modal.classList.remove('hidden');
   renderAddModal();
+  // Init Flatpickr on date fields after modal renders
+  if (window.flatpickr) {
+    ['add-client-start', 'add-program-start'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) flatpickr(el, { dateFormat: 'Y-m-d', disableMobile: true });
+    });
+  }
 }
 
 function closeModal() {
