@@ -609,13 +609,58 @@ function updateHealth(idx, value) {
   const wasAttention = normaliseHealth(c.health) === '🚩 Attention';
   const isAttention  = normaliseHealth(value) === '🚩 Attention';
   if (isAttention && !wasAttention) {
-    const reason = prompt('Why is this client flagged? (optional)') || '';
-    c.flag_reason = reason;
-  } else if (!isAttention) {
-    c.flag_reason = '';
+    // Show in-app modal to capture flag reason before saving
+    openFlagReasonModal(idx, value);
+    return;
   }
+  if (!isAttention) c.flag_reason = '';
   c.health = value;
   saveClients(idx);
+  render();
+}
+
+function openFlagReasonModal(idx, healthValue) {
+  const client = allClients[idx];
+  const modal  = document.getElementById('add-client-modal');
+  modal.classList.remove('hidden');
+  const inputCls = 'input-dark w-full bg-[#0a0d13] border border-white/[0.08] rounded-lg px-3 py-2.5 text-[13px] text-[#e2e8f0] focus:outline-none transition-all placeholder-[#4a5568]';
+  modal.innerHTML = `
+    <div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" onclick="cancelFlagReason(${idx})"></div>
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div class="modal-panel rounded-2xl w-full max-w-sm border border-white/[0.06]">
+        <div class="px-6 pt-6 pb-4 flex items-center justify-between">
+          <h2 class="text-base font-semibold text-white">Flag: ${client.name}</h2>
+          <button type="button" onclick="cancelFlagReason(${idx})" class="text-[#4a5568] hover:text-[#8892a8] text-lg leading-none transition-colors">&times;</button>
+        </div>
+        <div class="px-6 py-4">
+          <label class="block text-[12px] font-medium text-[#64748b] mb-2">Why is this client flagged? <span class="text-[#4a5568] font-normal">(optional)</span></label>
+          <input type="text" id="flag-reason-input" class="${inputCls}" placeholder="e.g. Missed check-ins, form breaking down" autofocus>
+        </div>
+        <div class="px-6 py-4 border-t border-white/[0.06] flex justify-end gap-2">
+          <button type="button" onclick="cancelFlagReason(${idx})" class="px-3.5 py-2 text-[13px] font-medium text-[#64748b] hover:text-[#e2e8f0] transition-colors">Cancel</button>
+          <button type="button" onclick="submitFlagReason(${idx}, '${healthValue.replace(/'/g, "\\'")}')" class="px-5 py-2 btn-primary text-[13px] font-semibold text-white rounded-lg">Flag Client</button>
+        </div>
+      </div>
+    </div>`;
+  // Allow Enter key to submit
+  setTimeout(() => {
+    const inp = document.getElementById('flag-reason-input');
+    if (inp) inp.addEventListener('keydown', e => { if (e.key === 'Enter') submitFlagReason(idx, healthValue); });
+  }, 50);
+}
+
+function submitFlagReason(idx, healthValue) {
+  const c = allClients[idx];
+  c.flag_reason = document.getElementById('flag-reason-input')?.value?.trim() || '';
+  c.health = healthValue;
+  saveClients(idx);
+  closeModal();
+  render();
+}
+
+function cancelFlagReason(idx) {
+  // Health dropdown reverted by re-render — no state change needed
+  closeModal();
   render();
 }
 
