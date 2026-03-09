@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" shape-rendering="geometricPrecision" text-rendering="geometricPrecision" image-rendering="optimizeQuality">
+  <defs>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blurred"/>
+      <feFlood flood-color="#a855f7" result="glowColor"/>
+      <feComposite in="glowColor" in2="blurred" operator="in" result="coloredGlow"/>
+      <feMerge>
+        <feMergeNode in="coloredGlow"/>
+        <feMergeNode in="coloredGlow"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <radialGradient id="outerMetalRing" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#333;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#444;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#333;stop-opacity:1" />
+    </radialGradient>
+    <radialGradient id="innerMetalRing" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#2a2a2a;stop-opacity:1" />
+      <stop offset="85%" style="stop-color:#2a2a2a;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#222;stop-opacity:1" />
+    </radialGradient>
+    <path id="ecgPath" d="M 50,256 L 150,256 L 170,246 L 190,266 L 210,256 L 240,256 L 256,166 L 272,256 L 310,256 L 330,236 L 350,276 L 370,256 L 470,256" stroke="#a855f7" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+    <clipPath id="circleClip">
+      <circle cx="256" cy="256" r="200"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#circleClip)">
+    <circle cx="256" cy="256" r="200" fill="url(#outerMetalRing)"/>
+    <circle cx="256" cy="256" r="200" stroke="#2a2a2a" stroke-width="2.5" fill="none"/>
+    <circle cx="256" cy="256" r="175" fill="url(#innerMetalRing)"/>
+    <circle cx="256" cy="256" r="175" stroke="#222" stroke-width="1.5" fill="none"/>
+    <circle cx="256" cy="256" r="150" fill="#222"/>
+    <use href="#ecgPath" filter="url(#glow)"/>
+    <use href="#ecgPath" stroke-width="2.5"/>
+  </g>
+</svg>
