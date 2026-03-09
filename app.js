@@ -202,7 +202,12 @@ function renderCell(client, col) {
 
     case 'review_flag': {
       const nri = nextReviewInfo(client, termToDays, bonusToDays);
-      const nr  = nri ? nri.date : null;
+      if (!nri) {
+        const reason = diagnoseMissingReviews(client, termToDays, bonusToDays);
+        if (reason) return `<td class="${TD_MUTED}"><span class="text-amber-400/70 text-[11px]" title="${reason}">⚠ Missing data</span></td>`;
+        return `<td class="${TD_MUTED}"><span class="text-[#4a5568]">—</span></td>`;
+      }
+      const nr  = nri.date;
       const rvf = reviewFlag(client, termToDays, bonusToDays);
       const cls = rvf ? 'font-medium text-white font-mono text-[12px]' : 'text-[#64748b] font-mono text-[12px]';
       const clickable = nri && rvf ? ` onclick="openReviewModal(${idx}, ${nri.reviewNum})" class="cursor-pointer hover:bg-white/[0.04] rounded-md transition-colors"` : '';
@@ -600,7 +605,16 @@ async function _flushSave() {
 }
 
 function updateHealth(idx, value) {
-  allClients[idx].health = value;
+  const c = allClients[idx];
+  const wasAttention = normaliseHealth(c.health) === '🚩 Attention';
+  const isAttention  = normaliseHealth(value) === '🚩 Attention';
+  if (isAttention && !wasAttention) {
+    const reason = prompt('Why is this client flagged? (optional)') || '';
+    c.flag_reason = reason;
+  } else if (!isAttention) {
+    c.flag_reason = '';
+  }
+  c.health = value;
   saveClients(idx);
   render();
 }
@@ -710,9 +724,16 @@ function openEditModal(idx) {
 
           <div>
             <h3 class="text-[11px] font-semibold text-[#4a5568] uppercase tracking-widest mb-3 font-mono">Client</h3>
-            <div>
-              <label class="block text-[12px] font-medium text-[#64748b] mb-1">Name</label>
-              <input type="text" id="edit-name" class="${inputCls}" value="${client.name}">
+            <div class="space-y-3">
+              <div>
+                <label class="block text-[12px] font-medium text-[#64748b] mb-1">Name</label>
+                <input type="text" id="edit-name" class="${inputCls}" value="${client.name}">
+              </div>
+              ${normaliseHealth(client.health) === '🚩 Attention' ? `
+              <div>
+                <label class="block text-[12px] font-medium text-[#64748b] mb-1">Flag Reason <span class="text-[#4a5568] font-normal">(optional)</span></label>
+                <input type="text" id="edit-flag-reason" class="${inputCls}" value="${(client.flag_reason || '').replace(/"/g, '&quot;')}" placeholder="Why is this client flagged?">
+              </div>` : ''}
             </div>
           </div>
 
@@ -784,7 +805,12 @@ function openEditModal(idx) {
                   return `<li class="text-[#64748b]">Review ${r.reviewNum}: ${dateStr} <span class="text-emerald-400/60">✓ done ${doneStr}</span>${noteStr}</li>`;
                 }
                 return `<li class="text-[#e2e8f0]">Review ${r.reviewNum}: ${dateStr} <button type="button" onclick="openReviewModal(${idx}, ${r.reviewNum})" class="ml-2 text-xs text-indigo-400 hover:underline">Complete review</button></li>`;
-              }).join('') : '<li class="text-[#4a5568]">No reviews in this term.</li>'}
+              }).join('') : (() => {
+                const reason = diagnoseMissingReviews(client, termToDays, bonusToDays);
+                return reason
+                  ? `<li class="text-amber-400/70 text-[12px]">⚠ ${reason}</li>`
+                  : '<li class="text-[#4a5568]">No reviews in this term.</li>';
+              })()}
             </ul>
           </div>
 
@@ -875,6 +901,10 @@ function saveEdit(idx) {
     client_start:  val('edit-client-start'),
     program_start: val('edit-program-start'),
   };
+  // Only update flag_reason if the field is visible (client is flagged)
+  if (document.getElementById('edit-flag-reason')) {
+    c.flag_reason = val('edit-flag-reason');
+  }
 
   saveClients(idx);
   closeModal();
@@ -1366,14 +1396,17 @@ function renderActionItems() {
     });
   });
 
-  function clientRow(c, sub) {
+  function clientRow(c, sub, sub2) {
     const hc = GANTT_BAR_COLOR[c._health] || GANTT_DEFAULT_COLOR;
-    return `<div class="flex items-center justify-between py-2.5 border-b border-white/[0.04] last:border-0 cursor-pointer hover:bg-white/[0.03] rounded-lg px-2 -mx-2 transition-colors" onclick="openEditModal(${c._idx})">
-      <div class="flex items-center gap-2.5 min-w-0">
-        <div class="w-1.5 h-1.5 rounded-full flex-shrink-0" style="background:${hc.border};box-shadow:0 0 6px ${hc.border}80;"></div>
-        <span class="text-[13px] font-medium text-[#e2e8f0] truncate">${c.name}</span>
+    return `<div class="py-2.5 border-b border-white/[0.04] last:border-0 cursor-pointer hover:bg-white/[0.03] rounded-lg px-2 -mx-2 transition-colors" onclick="openEditModal(${c._idx})">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div class="w-1.5 h-1.5 rounded-full flex-shrink-0" style="background:${hc.border};box-shadow:0 0 6px ${hc.border}80;"></div>
+          <span class="text-[13px] font-medium text-[#e2e8f0] truncate">${c.name}</span>
+        </div>
+        ${sub ? `<span class="text-[11px] text-[#64748b] font-mono ml-3 flex-shrink-0">${sub}</span>` : ''}
       </div>
-      ${sub ? `<span class="text-[11px] text-[#64748b] font-mono ml-3 flex-shrink-0">${sub}</span>` : ''}
+      ${sub2 ? `<div class="text-[11px] text-[#64748b] ml-4 mt-0.5 truncate">↳ ${sub2}</div>` : ''}
     </div>`;
   }
 
@@ -1391,21 +1424,50 @@ function renderActionItems() {
     </div>`;
   }
 
+  // Merged: Flagged (top) + Cruising (below divider)
+  const attentionRows = [
+    ...attention.map(c => clientRow(c, '', c.flag_reason || '')),
+    ...(attention.length > 0 && cruising.length > 0 ? [
+      `<div class="border-t border-white/[0.06] my-2 pt-1">
+        <span class="text-[10px] font-semibold text-[#4a5568] uppercase tracking-widest font-mono">Cruising</span>
+      </div>`
+    ] : []),
+    ...cruising.map(c => clientRow(c, '→ send encouragement')),
+  ].join('');
+
+  // Merged: Overdue reviews (top, with badge) + this week reviews (below divider)
+  const overdueRows  = overdueReviews.map(({c, r}) => {
+    const daysOver = Math.abs(Math.round((r.date - today) / 86400000));
+    return clientRow(c, `R${r.reviewNum} · <span class="text-rose-400">${daysOver}d overdue</span>`);
+  });
+  const weekRows = weekReviews.map(({c, r}) => {
+    const daysUntil = Math.round((r.date - today) / 86400000);
+    return clientRow(c, `R${r.reviewNum} · in ${daysUntil}d`);
+  });
+  const reviewRows = [
+    ...overdueRows,
+    ...(overdueReviews.length > 0 && weekReviews.length > 0 ? [
+      `<div class="border-t border-white/[0.06] my-2 pt-1">
+        <span class="text-[10px] font-semibold text-[#4a5568] uppercase tracking-widest font-mono">This Week</span>
+      </div>`
+    ] : []),
+    ...weekRows,
+  ].join('');
+  const totalReviews = overdueReviews.length + weekReviews.length;
+
   document.getElementById('actions-inner').innerHTML = `
     <div class="flex items-center gap-3 mb-5">
       <h2 class="text-base font-bold text-white">Action Items</h2>
       <span class="text-[12px] text-[#4a5568] font-mono">${getToday().toLocaleDateString('en-AU',{weekday:'short',day:'numeric',month:'short'})}</span>
     </div>
     <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-      ${card('Flagged for Attention','🚩',attention.length, attention.map(c=>clientRow(c,'')).join(''), true)}
-      ${card('Overdue Reviews','⚠️',overdueReviews.length, overdueReviews.map(({c,r})=>clientRow(c,`R${r.reviewNum} · ${Math.abs(Math.round((r.date-today)/86400000))}d overdue`)).join(''), true)}
+      ${card('Needs Attention','🚩', attention.length + cruising.length, attentionRows, attention.length > 0)}
+      ${card('Reviews','📅', totalReviews, reviewRows, overdueReviews.length > 0)}
       ${card('Renewals Due','🔄',renewalsDue.length, renewalsDue.map(c=>{
         const rc=renewContact(c,termToDays,bonusToDays);
         const d=rc?Math.round((rc-today)/86400000):null;
         return clientRow(c, d!==null?(d<0?`${Math.abs(d)}d overdue`:`in ${d}d`):'');
       }).join(''), true)}
-      ${card('Reviews This Week','📅',weekReviews.length, weekReviews.map(({c,r})=>clientRow(c,`R${r.reviewNum} · ${fmt(r.date)}`)).join(''), false)}
-      ${card('Cruising','🔸',cruising.length, cruising.map(c=>clientRow(c,'→ send encouragement')).join(''), false)}
     </div>`;
 }
 

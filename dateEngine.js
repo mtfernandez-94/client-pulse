@@ -151,6 +151,14 @@ function urgencyScore(c, termToDays, bonusToDays) {
   return 99999;
 }
 
+// ── Review date diagnostic ────────────────────────────────────────────────────
+// Returns a human-readable reason why reviews can't be calculated, or null if data is fine.
+function diagnoseMissingReviews(c, termToDays, bonusToDays) {
+  if (!parseDate(c.dates?.program_start)) return 'Missing or invalid program start date';
+  if (!termToDays[c.contract?.term]) return `Missing or invalid contract term: "${c.contract?.term || '(empty)'}"`;
+  return null;
+}
+
 // ── Health normalisation ──────────────────────────────────────────────────────
 // Spreadsheet export has inconsistent spacing/emoji — normalise to canonical values
 

@@ -51,6 +51,7 @@ function rowToClient(row) {
     pause_history: row.pause_history || [],
     notes:         row.notes || '',
     client_notes:  row.client_notes || [],
+    flag_reason:   row.flag_reason || '',
   };
 }
 
@@ -68,6 +69,7 @@ function clientToRow(client, coachId) {
     pause_history: client.pause_history || [],
     notes:         client.notes || '',
     client_notes:  client.client_notes || [],
+    flag_reason:   client.flag_reason || '',
   };
   if (client.id) row.id = client.id;
   return row;

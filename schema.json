@@ -21,6 +21,12 @@
       "label": "Client Name",
       "ui_step": 1
     },
+    "flag_reason": {
+      "type": "string",
+      "required": false,
+      "label": "Flag Reason",
+      "note": "Reason for flagging client as Attention. Cleared when health changes away from Attention."
+    },
     "status": {
       "type": "enum",
       "required": true,
