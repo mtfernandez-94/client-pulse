@@ -1768,13 +1768,13 @@ function renderActionItems() {
     </div>`;
 }
 
-// ── Bulk Notes (Gemini) ───────────────────────────────────────────────────────
+// ── Bulk Notes (Groq) ────────────────────────────────────────────────────────
 
 function openBulkNotesModal() {
   const modal = document.getElementById('add-client-modal');
   if (!modal) return;
   modal.classList.remove('hidden');
-  const storedKey = localStorage.getItem('cp_gemini_key') || '';
+  const storedKey = localStorage.getItem('cp_groq_key') || '';
   const inputCls  = 'input-dark w-full bg-[#0a0d13] border border-white/[0.08] rounded-xl px-3 py-2.5 text-[13px] text-[#e2e8f0] focus:outline-none transition-all placeholder-[#4a5568]';
 
   modal.innerHTML = `
@@ -1791,13 +1791,13 @@ function openBulkNotesModal() {
         <div class="px-6 py-4 overflow-y-auto max-h-[65vh] space-y-4">
           ${storedKey
             ? `<div class="flex items-center justify-between p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                <span class="text-[12px] text-emerald-400">✓ Gemini API key configured</span>
-                <button onclick="localStorage.removeItem('cp_gemini_key');openBulkNotesModal();" class="text-[11px] text-[#4a5568] hover:text-rose-400 transition-colors">Remove</button>
+                <span class="text-[12px] text-emerald-400">✓ Groq API key configured</span>
+                <button onclick="localStorage.removeItem('cp_groq_key');openBulkNotesModal();" class="text-[11px] text-[#4a5568] hover:text-rose-400 transition-colors">Remove</button>
                </div>`
             : `<div id="bulk-key-section" class="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 space-y-2">
-                <p class="text-[12px] text-amber-400 font-medium">Gemini API key required (free at aistudio.google.com)</p>
-                <input type="password" id="bulk-gemini-key" placeholder="Paste API key here" class="${inputCls}">
-                <p class="text-[11px] text-[#4a5568]">Stored in your browser only. Never sent anywhere except Gemini.</p>
+                <p class="text-[12px] text-amber-400 font-medium">Groq API key required (free at console.groq.com)</p>
+                <input type="password" id="bulk-groq-key" placeholder="Paste API key here" class="${inputCls}">
+                <p class="text-[11px] text-[#4a5568]">Stored in your browser only. Never sent anywhere except Groq.</p>
                </div>`}
           <div>
             <label class="block text-[12px] font-medium text-[#64748b] mb-1.5">Your dictation</label>
@@ -1821,25 +1821,25 @@ function openBulkNotesModal() {
 
 async function parseBulkNotes() {
   const text     = document.getElementById('bulk-notes-text')?.value?.trim();
-  const keyInput = document.getElementById('bulk-gemini-key');
+  const keyInput = document.getElementById('bulk-groq-key');
   const errorEl  = document.getElementById('bulk-error');
   const parseBtn = document.getElementById('btn-parse-notes');
   errorEl.classList.add('hidden');
 
   if (keyInput?.value?.trim()) {
-    localStorage.setItem('cp_gemini_key', keyInput.value.trim());
+    localStorage.setItem('cp_groq_key', keyInput.value.trim());
     // Swap the amber key-entry section for the green "configured" banner
     const keySection = document.getElementById('bulk-key-section');
     if (keySection) {
       keySection.outerHTML = `<div class="flex items-center justify-between p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-        <span class="text-[12px] text-emerald-400">✓ Gemini API key configured</span>
-        <button onclick="localStorage.removeItem('cp_gemini_key');openBulkNotesModal();" class="text-[11px] text-[#4a5568] hover:text-rose-400 transition-colors">Remove</button>
+        <span class="text-[12px] text-emerald-400">✓ Groq API key configured</span>
+        <button onclick="localStorage.removeItem('cp_groq_key');openBulkNotesModal();" class="text-[11px] text-[#4a5568] hover:text-rose-400 transition-colors">Remove</button>
       </div>`;
     }
   }
-  const apiKey = localStorage.getItem('cp_gemini_key');
-  if (!apiKey) { errorEl.textContent = 'Enter your Gemini API key first.'; errorEl.classList.remove('hidden'); return; }
-  if (!text)   { errorEl.textContent = 'Enter some notes to parse.';        errorEl.classList.remove('hidden'); return; }
+  const apiKey = localStorage.getItem('cp_groq_key');
+  if (!apiKey) { errorEl.textContent = 'Enter your Groq API key first.'; errorEl.classList.remove('hidden'); return; }
+  if (!text)   { errorEl.textContent = 'Enter some notes to parse.';      errorEl.classList.remove('hidden'); return; }
 
   parseBtn.textContent = 'Parsing…';
   parseBtn.disabled    = true;
@@ -1855,11 +1855,12 @@ Return ONLY a JSON array: [{"client":"exact name","note":"their note"}]
 JSON array only:`;
 
   try {
-    const res  = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${apiKey}`,
-      { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ contents:[{parts:[{text:prompt}]}] }) });
+    const res  = await fetch('https://api.groq.com/openai/v1/chat/completions',
+      { method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`},
+        body: JSON.stringify({ model:'llama-3.3-70b-versatile', messages:[{role:'user',content:prompt}], temperature:0.1 }) });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error?.message || 'Gemini API error');
-    const raw   = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    if (!res.ok) throw new Error(data.error?.message || 'Groq API error');
+    const raw   = data.choices?.[0]?.message?.content || '';
     const match = raw.match(/\[[\s\S]*\]/);
     if (!match) throw new Error('Could not parse AI response. Try rephrasing your notes.');
     const parsed = JSON.parse(match[0]);
