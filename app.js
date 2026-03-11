@@ -1794,9 +1794,9 @@ function openBulkNotesModal() {
                 <span class="text-[12px] text-emerald-400">✓ Gemini API key configured</span>
                 <button onclick="localStorage.removeItem('cp_gemini_key');openBulkNotesModal();" class="text-[11px] text-[#4a5568] hover:text-rose-400 transition-colors">Remove</button>
                </div>`
-            : `<div class="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 space-y-2">
+            : `<div id="bulk-key-section" class="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 space-y-2">
                 <p class="text-[12px] text-amber-400 font-medium">Gemini API key required (free at aistudio.google.com)</p>
-                <input type="text" id="bulk-gemini-key" placeholder="Paste API key here" class="${inputCls}">
+                <input type="password" id="bulk-gemini-key" placeholder="Paste API key here" class="${inputCls}">
                 <p class="text-[11px] text-[#4a5568]">Stored in your browser only. Never sent anywhere except Gemini.</p>
                </div>`}
           <div>
@@ -1826,7 +1826,17 @@ async function parseBulkNotes() {
   const parseBtn = document.getElementById('btn-parse-notes');
   errorEl.classList.add('hidden');
 
-  if (keyInput?.value?.trim()) localStorage.setItem('cp_gemini_key', keyInput.value.trim());
+  if (keyInput?.value?.trim()) {
+    localStorage.setItem('cp_gemini_key', keyInput.value.trim());
+    // Swap the amber key-entry section for the green "configured" banner
+    const keySection = document.getElementById('bulk-key-section');
+    if (keySection) {
+      keySection.outerHTML = `<div class="flex items-center justify-between p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+        <span class="text-[12px] text-emerald-400">✓ Gemini API key configured</span>
+        <button onclick="localStorage.removeItem('cp_gemini_key');openBulkNotesModal();" class="text-[11px] text-[#4a5568] hover:text-rose-400 transition-colors">Remove</button>
+      </div>`;
+    }
+  }
   const apiKey = localStorage.getItem('cp_gemini_key');
   if (!apiKey) { errorEl.textContent = 'Enter your Gemini API key first.'; errorEl.classList.remove('hidden'); return; }
   if (!text)   { errorEl.textContent = 'Enter some notes to parse.';        errorEl.classList.remove('hidden'); return; }
@@ -1845,7 +1855,7 @@ Return ONLY a JSON array: [{"client":"exact name","note":"their note"}]
 JSON array only:`;
 
   try {
-    const res  = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+    const res  = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
       { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ contents:[{parts:[{text:prompt}]}] }) });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error?.message || 'Gemini API error');
