@@ -1844,14 +1844,24 @@ async function parseBulkNotes() {
   parseBtn.textContent = 'Parsing…';
   parseBtn.disabled    = true;
 
-  const names  = allClients.map(c => c.name);
-  const prompt = `Parse this coaching note text and attribute each note to the correct client from the list.
-Client list: ${names.join(', ')}
-Text: "${text}"
-Return ONLY a JSON array: [{"client":"exact name","note":"their note"}]
-- Match names fuzzily (nicknames, first names ok).
-- If ambiguous, use null for client.
-- Only include clients mentioned.
+  // Only include active + paused clients (never archived)
+  const eligibleClients = allClients.filter(c => c.status === 'active' || c.status === 'paused');
+  const clientList = eligibleClients.map((c, i) => `${i + 1}. ${c.name}`).join('\n');
+  const prompt = `You are a coaching notes parser. Match each note to a client from the numbered list below.
+
+CLIENT LIST:
+${clientList}
+
+DICTATION:
+"${text}"
+
+RULES:
+- Return ONLY a JSON array: [{"client":"exact full name from list","note":"the note"}]
+- Use the EXACT name spelling from the list above — do not modify it.
+- Match by closest name even if abbreviated or misspelled (e.g. "Nick Del" → "Nick Delta").
+- If NO client in the list is a reasonable match, set client to null. Do NOT guess wildly.
+- Only include clients that are actually mentioned in the dictation.
+
 JSON array only:`;
 
   try {
@@ -1865,14 +1875,46 @@ JSON array only:`;
     if (!match) throw new Error('Could not parse AI response. Try rephrasing your notes.');
     const parsed = JSON.parse(match[0]);
 
+    // Levenshtein distance for fuzzy matching
+    function levenshtein(a, b) {
+      const m = a.length, n = b.length;
+      const dp = Array.from({length: m + 1}, () => Array(n + 1).fill(0));
+      for (let i = 0; i <= m; i++) dp[i][0] = i;
+      for (let j = 0; j <= n; j++) dp[0][j] = j;
+      for (let i = 1; i <= m; i++)
+        for (let j = 1; j <= n; j++)
+          dp[i][j] = a[i-1] === b[j-1] ? dp[i-1][j-1] : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+      return dp[m][n];
+    }
+
+    function findBestMatch(name) {
+      const input = name.toLowerCase().trim();
+      if (!input) return { idx: -1, matched: false };
+      let bestIdx = -1, bestDist = Infinity;
+      eligibleClients.forEach((c, i) => {
+        const full = c.name.toLowerCase();
+        // Exact match
+        if (full === input) { bestIdx = i; bestDist = 0; return; }
+        // Distance on full name
+        const dFull = levenshtein(input, full);
+        if (dFull < bestDist) { bestDist = dFull; bestIdx = i; }
+        // Distance on first name only
+        const first = full.split(' ')[0];
+        const inputFirst = input.split(' ')[0];
+        const dFirst = levenshtein(inputFirst, first);
+        if (dFirst < bestDist) { bestDist = dFirst; bestIdx = i; }
+      });
+      // Reject if edit distance is more than 40% of the input length — too far off
+      const maxDist = Math.max(3, Math.ceil(input.length * 0.4));
+      if (bestDist > maxDist) return { idx: -1, matched: false };
+      // Map back to allClients index
+      const realIdx = allClients.indexOf(eligibleClients[bestIdx]);
+      return { idx: realIdx, matched: realIdx !== -1 };
+    }
+
     window._bulkPayload = parsed.map(item => {
-      const name = (item.client || '').toLowerCase();
-      const idx  = allClients.findIndex(c =>
-        c.name.toLowerCase() === name ||
-        c.name.toLowerCase().includes(name) ||
-        name.includes(c.name.split(' ')[0].toLowerCase())
-      );
-      return { ...item, idx, matched: idx !== -1 };
+      const { idx, matched } = findBestMatch(item.client || '');
+      return { ...item, idx, matched };
     });
 
     document.getElementById('bulk-preview').classList.remove('hidden');
