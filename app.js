@@ -14,6 +14,8 @@ let sortCol = 'renewalUrgency';
 let sortDir = 'asc';
 let viewMode = 'table'; // 'table' | 'gantt' | 'actions'
 let _lastAutoBackup = 0; // timestamp of last auto-backup
+let searchQuery = '';     // current search text
+let searchAllClients = false; // true = include paused/archived in search dropdown
 
 // ── Style maps ────────────────────────────────────────────────────────────────
 // Health options come from schema; styles are UI-only and keyed by schema order.
@@ -55,6 +57,10 @@ function getVisible() {
   if (filterStatus !== 'all') list = list.filter(c => c.status === filterStatus);
   if (filterHealth)            list = list.filter(c => c._health === filterHealth);
   if (filterTerm)              list = list.filter(c => c.contract?.term === filterTerm);
+  if (searchQuery) {
+    const q = searchQuery.toLowerCase();
+    list = list.filter(c => c.name.toLowerCase().includes(q));
+  }
 
   // Pre-compute expensive date fields once per client (instead of O(n log n) times during sort)
   list.forEach(c => {
@@ -235,6 +241,97 @@ function updateSortIcons() {
   });
 }
 
+// ── Search ─────────────────────────────────────────────────────────────────────
+
+function toggleSearch() {
+  const expand = document.getElementById('search-expand');
+  if (!expand) return;
+  const isHidden = expand.classList.contains('hidden');
+  if (isHidden) {
+    openSearch();
+  } else {
+    closeSearch();
+  }
+}
+
+function openSearch() {
+  const expand = document.getElementById('search-expand');
+  if (!expand) return;
+  expand.classList.remove('hidden');
+  setTimeout(() => document.getElementById('search-input')?.focus(), 50);
+}
+
+function closeSearch() {
+  document.getElementById('search-expand')?.classList.add('hidden');
+  document.getElementById('search-dropdown')?.classList.add('hidden');
+  const input = document.getElementById('search-input');
+  if (input) input.value = '';
+  // Reset search-all toggle
+  if (searchAllClients) {
+    searchAllClients = false;
+    const btn = document.getElementById('btn-search-all');
+    if (btn) btn.textContent = 'Active only';
+  }
+  if (searchQuery) {
+    searchQuery = '';
+    render();
+  }
+}
+
+function onSearchInput(value) {
+  searchQuery = value.trim();
+  render();
+  if (!searchQuery) {
+    document.getElementById('search-dropdown')?.classList.add('hidden');
+    return;
+  }
+  renderSearchDropdown(searchQuery);
+}
+
+function toggleSearchAll() {
+  searchAllClients = !searchAllClients;
+  const btn = document.getElementById('btn-search-all');
+  if (btn) {
+    btn.textContent = searchAllClients ? 'All clients' : 'Active only';
+    btn.classList.toggle('text-indigo-400', searchAllClients);
+    btn.classList.toggle('text-[#4a5568]', !searchAllClients);
+  }
+  const currentQuery = document.getElementById('search-input')?.value?.trim() || '';
+  if (currentQuery) renderSearchDropdown(currentQuery);
+}
+
+function renderSearchDropdown(query) {
+  const dropdown = document.getElementById('search-dropdown');
+  if (!dropdown) return;
+  const q = query.toLowerCase();
+  const pool = allClients
+    .map((c, i) => ({ ...c, _idx: i }))
+    .filter(c => searchAllClients ? true : c.status === 'active')
+    .filter(c => c.name.toLowerCase().includes(q));
+
+  if (pool.length === 0) {
+    dropdown.innerHTML = '<div class="px-4 py-3 text-[13px] text-[#4a5568] font-mono">No matches</div>';
+    dropdown.classList.remove('hidden');
+    return;
+  }
+
+  dropdown.innerHTML = pool.slice(0, 12).map(c => {
+    // Bold-highlight matching substring
+    const lower = c.name.toLowerCase();
+    const start = lower.indexOf(q);
+    const end   = start + q.length;
+    const highlighted = start >= 0
+      ? c.name.slice(0, start) + `<span class="text-indigo-400 font-semibold">${c.name.slice(start, end)}</span>` + c.name.slice(end)
+      : c.name;
+    const statusDot = c.status === 'paused' ? ' <span class="text-amber-400/60 text-[10px]">⏸</span>' : c.status === 'archived' ? ' <span class="text-[#4a5568] text-[10px]">archived</span>' : '';
+    return `<div class="px-4 py-2.5 text-[13px] text-[#e2e8f0] hover:bg-white/[0.05] cursor-pointer transition-colors flex items-center gap-2"
+      onclick="openEditModal(${c._idx}); closeSearch();">
+      ${highlighted}${statusDot}
+    </div>`;
+  }).join('');
+  dropdown.classList.remove('hidden');
+}
+
 // ── Filter button state ───────────────────────────────────────────────────────
 
 function updateFilterButtons() {
@@ -282,6 +379,7 @@ function renderHeaders() {
 // ── Main render ───────────────────────────────────────────────────────────────
 
 function render() {
+  checkScheduledPauses();
   updateFilterButtons();
   updateSortIcons();
   updateViewToggle();
@@ -293,7 +391,7 @@ function render() {
     document.getElementById('table-wrap').classList.add('hidden');
     document.getElementById('gantt-wrap').classList.remove('hidden');
     document.getElementById('actions-wrap').classList.add('hidden');
-    document.getElementById('btn-bulk-notes')?.classList.add('hidden');
+    document.getElementById('btn-bulk-notes')?.classList.remove('hidden');
     renderGantt();
     return;
   }
@@ -302,7 +400,7 @@ function render() {
     document.getElementById('table-wrap').classList.add('hidden');
     document.getElementById('gantt-wrap').classList.add('hidden');
     document.getElementById('actions-wrap').classList.remove('hidden');
-    document.getElementById('btn-bulk-notes')?.classList.add('hidden');
+    document.getElementById('btn-bulk-notes')?.classList.remove('hidden');
     renderActionItems();
     return;
   }
@@ -539,9 +637,40 @@ function setupEvents() {
   document.getElementById('view-table')?.addEventListener('click', () => { viewMode = 'table'; render(); });
   document.getElementById('view-gantt')?.addEventListener('click', () => { viewMode = 'gantt'; render(); });
   document.getElementById('view-actions')?.addEventListener('click', () => { viewMode = 'actions'; render(); });
-  document.getElementById('btn-export-csv')?.addEventListener('click', exportCSV);
-  document.getElementById('btn-import-json')?.addEventListener('click', importBackupJSON);
+  document.getElementById('btn-export-csv')?.addEventListener('click', () => { exportCSV(); closeHamburger(); });
+  document.getElementById('btn-import-json')?.addEventListener('click', () => { importBackupJSON(); closeHamburger(); });
   document.getElementById('btn-bulk-notes')?.addEventListener('click', openBulkNotesModal);
+
+  // ── Hamburger menu ────────────────────────────────────────────────────────
+  document.getElementById('btn-hamburger')?.addEventListener('click', e => {
+    e.stopPropagation();
+    toggleHamburger();
+  });
+
+  // ── Search ────────────────────────────────────────────────────────────────
+  document.getElementById('btn-search')?.addEventListener('click', e => {
+    e.stopPropagation();
+    toggleSearch();
+  });
+  document.getElementById('btn-search-all')?.addEventListener('click', e => {
+    e.stopPropagation();
+    toggleSearchAll();
+  });
+  document.getElementById('search-input')?.addEventListener('input', e => {
+    onSearchInput(e.target.value);
+  });
+  document.getElementById('search-input')?.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeSearch();
+  });
+
+  // ── Global hotkeys ────────────────────────────────────────────────────────
+  document.addEventListener('keydown', handleGlobalHotkey);
+
+  // ── Click-outside: close hamburger and search ─────────────────────────────
+  document.addEventListener('click', e => {
+    if (!document.getElementById('hamburger-wrap')?.contains(e.target)) closeHamburger();
+    if (!document.getElementById('search-wrapper')?.contains(e.target)) closeSearch();
+  });
 
   // ── Inline date editing: event delegation on tbody ───────────────────────
   document.getElementById('tbody')?.addEventListener('click', e => {
@@ -549,6 +678,59 @@ function setupEvents() {
     if (!td) return;
     openInlineDatePicker(td);
   });
+}
+
+// ── Hamburger menu ─────────────────────────────────────────────────────────────
+
+function toggleHamburger() {
+  const menu = document.getElementById('hamburger-menu');
+  if (!menu) return;
+  menu.classList.toggle('hidden');
+}
+
+function closeHamburger() {
+  document.getElementById('hamburger-menu')?.classList.add('hidden');
+}
+
+// ── Global hotkeys ─────────────────────────────────────────────────────────────
+
+function handleGlobalHotkey(e) {
+  // Skip if typing in any interactive element
+  const tag = (e.target.tagName || '').toLowerCase();
+  if (['input', 'textarea', 'select'].includes(tag) || e.target.isContentEditable) return;
+
+  // Skip if a modal is open
+  const modal = document.getElementById('add-client-modal');
+  if (modal && !modal.classList.contains('hidden') && modal.innerHTML.trim() !== '') return;
+
+  // Skip if modifier keys are held (avoid clashing with browser shortcuts)
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+  switch (e.key.toLowerCase()) {
+    case 'j':
+      e.preventDefault();
+      toggleSearch();
+      break;
+    case 'b':
+      e.preventDefault();
+      openBulkNotesModal();
+      break;
+    case 't':
+      e.preventDefault();
+      viewMode = 'table';
+      render();
+      break;
+    case 'g':
+      e.preventDefault();
+      viewMode = 'gantt';
+      render();
+      break;
+    case 'a':
+      e.preventDefault();
+      viewMode = 'actions';
+      render();
+      break;
+  }
 }
 
 function updateViewToggle() {
@@ -767,18 +949,23 @@ function openEditModal(idx) {
         </div>
         <div class="px-6 py-4 overflow-y-auto max-h-[65vh] space-y-6">
 
-          <div>
-            <h3 class="text-[11px] font-semibold text-[#4a5568] uppercase tracking-widest mb-3 font-mono">Client</h3>
+          <!-- ── Quick-edit: Name / Health / Flag Reason ──────────────── -->
+          <div class="pb-5 mb-1 border-b-2 border-white/[0.08]">
             <div class="space-y-3">
               <div>
-                <label class="block text-[12px] font-medium text-[#64748b] mb-1">Name</label>
-                <input type="text" id="edit-name" class="${inputCls}" value="${client.name}">
+                <label class="block text-[12px] font-semibold text-[#8892a8] uppercase tracking-widest mb-1.5 font-mono">Name</label>
+                <input type="text" id="edit-name" class="${inputCls} text-base font-semibold" value="${client.name}">
               </div>
-              ${normaliseHealth(client.health) === '🚩 Attention' ? `
               <div>
-                <label class="block text-[12px] font-medium text-[#64748b] mb-1">Flag Reason <span class="text-[#4a5568] font-normal">(optional)</span></label>
+                <label class="block text-[12px] font-semibold text-[#8892a8] uppercase tracking-widest mb-1.5 font-mono">Health</label>
+                <select id="edit-health" class="${inputCls}" onchange="onEditHealthChange(this.value)">
+                  ${selectOpts(f.health.options, normaliseHealth(client.health))}
+                </select>
+              </div>
+              <div id="edit-flag-reason-wrap" class="${normaliseHealth(client.health) !== '🚩 Attention' ? 'hidden' : ''}">
+                <label class="block text-[12px] font-semibold text-[#8892a8] uppercase tracking-widest mb-1.5 font-mono">Flag Reason <span class="text-[#4a5568] normal-case font-normal">(optional)</span></label>
                 <input type="text" id="edit-flag-reason" class="${inputCls}" value="${(client.flag_reason || '').replace(/"/g, '&quot;')}" placeholder="Why is this client flagged?">
-              </div>` : ''}
+              </div>
             </div>
           </div>
 
@@ -921,6 +1108,13 @@ function openEditModal(idx) {
   }
 }
 
+// ── Health change handler in edit modal ───────────────────────────────────────
+
+function onEditHealthChange(value) {
+  const wrap = document.getElementById('edit-flag-reason-wrap');
+  if (wrap) wrap.classList.toggle('hidden', normaliseHealth(value) !== '🚩 Attention');
+}
+
 function saveEdit(idx) {
   const val = id => document.getElementById(id)?.value || '';
   const num = id => { const v = document.getElementById(id)?.value; return v === '' ? 0 : Number(v); };
@@ -928,6 +1122,16 @@ function saveEdit(idx) {
 
   const c = allClients[idx];
   c.name = val('edit-name');
+
+  // Update health from the dropdown
+  const newHealth = val('edit-health');
+  if (newHealth) {
+    const wasAttention = normaliseHealth(c.health) === '🚩 Attention';
+    const isAttention  = normaliseHealth(newHealth) === '🚩 Attention';
+    if (!isAttention && wasAttention) c.flag_reason = '';
+    c.health = newHealth;
+  }
+
   c.contract = {
     ...c.contract,
     term:       val('edit-term'),
@@ -946,8 +1150,9 @@ function saveEdit(idx) {
     client_start:  val('edit-client-start'),
     program_start: val('edit-program-start'),
   };
-  // Only update flag_reason if the field is visible (client is flagged)
-  if (document.getElementById('edit-flag-reason')) {
+  // Update flag_reason if field is visible
+  const flagWrap = document.getElementById('edit-flag-reason-wrap');
+  if (flagWrap && !flagWrap.classList.contains('hidden')) {
     c.flag_reason = val('edit-flag-reason');
   }
 
@@ -965,6 +1170,7 @@ function showPauseForm(idx) {
   if (!client || client.status !== 'active') return;
   const modal = document.getElementById('add-client-modal');
   if (!modal) return;
+  modal.classList.remove('hidden');
   const today = todayISO();
   modal.innerHTML = `
     <div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" onclick="cancelPauseForm(${idx})"></div>
@@ -1035,6 +1241,8 @@ function showPauseForm(idx) {
   if (fromToEnd) fromToEnd.min = today;
   togglePauseModePanels();
   updatePausePreview();
+  // Init Flatpickr on date inputs so the calendar widget appears
+  initAllModalDatepickers();
 }
 
 function togglePauseModePanels() {
@@ -1105,6 +1313,7 @@ function submitPauseForm(idx) {
   const reason = document.getElementById('pause-reason')?.value?.trim() || null;
   const pausedStr = pausedDate.toISOString().slice(0, 10);
   const resumedStr = resumedDate.toISOString().slice(0, 10);
+  const isFuture = pausedStr > todayISO();
 
   if (!client.pause_history) client.pause_history = [];
   client.pause_history.push({
@@ -1113,16 +1322,47 @@ function submitPauseForm(idx) {
     weeks,
     reason,
     health_before_pause: client.health || '🆕 Onboarding',
+    ...(isFuture ? { pending: true } : {}),
   });
   client.dates = client.dates || {};
   client.dates.weeks_paused = (client.dates.weeks_paused || 0) + weeks;
-  client.status = 'paused';
-  client.health = '⏸️ Pause';
+
+  // Only move to paused status immediately if pause starts today or earlier
+  if (!isFuture) {
+    client.status = 'paused';
+    client.health = '⏸️ Pause';
+  }
 
   saveClients(idx);
   closeModal();
   render();
   renderStats();
+  showToast(isFuture ? `Pause scheduled from ${pausedStr}` : `${client.name} paused`);
+}
+
+// ── Scheduled pause checker — call on render to auto-activate/auto-resume ─────
+
+function checkScheduledPauses() {
+  const todayStr = todayISO();
+  allClients.forEach((client, idx) => {
+    if (!client.pause_history || !client.pause_history.length) return;
+    const last = client.pause_history[client.pause_history.length - 1];
+
+    // Activate a pending (future-scheduled) pause whose start date has arrived
+    if (client.status === 'active' && last.pending && last.paused_date <= todayStr) {
+      client.status = 'paused';
+      client.health = '⏸️ Pause';
+      delete last.pending;
+      saveClients(idx);
+    }
+
+    // Auto-resume a paused client whose resume date has passed
+    if (client.status === 'paused' && last.resumed_date && last.resumed_date <= todayStr) {
+      client.status = 'active';
+      client.health = last.health_before_pause || '🆕 Onboarding';
+      saveClients(idx);
+    }
+  });
 }
 
 function confirmResume(idx) {
@@ -1426,7 +1666,8 @@ function renderActionItems() {
   const weekFromNow = addDays(today, 7);
   const active      = allClients
     .map((c, i) => ({ ...c, _idx: i, _health: normaliseHealth(c.health) }))
-    .filter(c => c.status === 'active');
+    .filter(c => c.status === 'active')
+    .filter(c => !searchQuery || c.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
   const attention  = active.filter(c => c._health === '🚩 Attention');
   const cruising   = active.filter(c => c._health === '🔸 Cruising');
@@ -1471,7 +1712,7 @@ function renderActionItems() {
 
   // Merged: Flagged (top) + Cruising (below divider)
   const attentionRows = [
-    ...attention.map(c => clientRow(c, '', c.flag_reason || '')),
+    ...attention.map(c => clientRow(c, c.flag_reason || '', '')),
     ...(attention.length > 0 && cruising.length > 0 ? [
       `<div class="border-t border-white/[0.06] my-2 pt-1">
         <span class="text-[10px] font-semibold text-[#4a5568] uppercase tracking-widest font-mono">Cruising</span>

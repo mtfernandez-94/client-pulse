@@ -397,6 +397,23 @@
         0 1px 2px rgba(0,0,0,0.2),
         inset 0 1px 0 rgba(255,255,255,0.1);
     }
+
+    /* ── Hotkey underline on hover ────────────────────────────────────── */
+    .filter-pill:hover .hotkey-u { text-decoration: underline; }
+
+    /* ── Hamburger dropdown ───────────────────────────────────────────── */
+    #hamburger-menu {
+      animation: fade-in-down 0.12s ease forwards;
+    }
+    @keyframes fade-in-down {
+      from { opacity: 0; transform: translateY(-4px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── Search input expansion ───────────────────────────────────────── */
+    #search-dropdown {
+      animation: fade-in-down 0.12s ease forwards;
+    }
   </style>
 </head>
 <body class="min-h-screen text-[#e2e8f0] font-sans relative">
@@ -429,12 +446,36 @@
       <div class="flex items-center gap-3">
         <div class="w-2.5 h-2.5 rounded-full bg-indigo-400 pulse-dot" style="box-shadow: 0 0 10px rgba(129,140,248,0.5);"></div>
         <h1 class="text-lg font-bold tracking-tight text-white">ClientPulse</h1>
-        <div id="today-display" class="text-[12px] text-[#4a5568] font-mono font-medium tracking-wide ml-4 hidden sm:block"></div>
+        <!-- ── Hamburger menu (Import / Export) ─── -->
+        <div class="relative" id="hamburger-wrap">
+          <button id="btn-hamburger" title="More options"
+            class="btn-secondary w-8 h-8 flex items-center justify-center rounded-lg cursor-pointer text-[#64748b] hover:text-[#8892a8] transition-colors text-lg leading-none">⋯</button>
+          <div id="hamburger-menu" class="hidden absolute left-0 top-full mt-1 w-44 glass rounded-xl border border-white/[0.08] shadow-2xl z-50 py-1">
+            <button id="btn-import-json" class="w-full text-left px-4 py-2.5 text-[13px] text-[#8892a8] hover:bg-white/[0.04] hover:text-[#e2e8f0] transition-colors">Import JSON</button>
+            <button id="btn-export-csv" class="w-full text-left px-4 py-2.5 text-[13px] text-[#8892a8] hover:bg-white/[0.04] hover:text-[#e2e8f0] transition-colors">Export CSV</button>
+          </div>
+        </div>
+        <div id="today-display" class="text-[12px] text-[#4a5568] font-mono font-medium tracking-wide ml-2 hidden sm:block"></div>
       </div>
       <div class="flex items-center gap-2.5">
-        <button id="btn-import-json" class="btn-secondary px-4 py-2 text-[13px] font-medium text-[#8892a8] rounded-lg cursor-pointer">Import</button>
-        <button id="btn-export-csv" class="btn-secondary px-4 py-2 text-[13px] font-medium text-[#8892a8] rounded-lg cursor-pointer">Export CSV</button>
         <span id="backup-status" class="text-[11px] text-[#4a5568] font-mono hidden">✓ Backed up</span>
+        <!-- ── Search ─────────────────────────────── -->
+        <div class="relative flex items-center" id="search-wrapper">
+          <div id="search-expand" class="hidden flex items-center gap-2 mr-1">
+            <input id="search-input" type="text" placeholder="Search clients…" autocomplete="off"
+              class="input-dark bg-surface-2 border border-white/[0.08] rounded-lg px-3 py-1.5 text-[13px] text-[#e2e8f0] focus:outline-none transition-all placeholder-[#4a5568] w-44">
+            <button id="btn-search-all" title="Toggle: search all clients"
+              class="text-[11px] px-2 py-1 rounded-md text-[#4a5568] hover:text-[#8892a8] border border-white/[0.06] bg-white/[0.02] transition-colors whitespace-nowrap">Active only</button>
+          </div>
+          <button id="btn-search" title="Search (J)"
+            class="btn-secondary w-8 h-8 flex items-center justify-center rounded-lg cursor-pointer text-[#64748b] hover:text-[#8892a8] transition-colors">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+          </button>
+          <!-- Search results dropdown -->
+          <div id="search-dropdown" class="hidden absolute right-0 top-full mt-2 w-72 glass rounded-xl border border-white/[0.08] shadow-2xl z-50 overflow-hidden max-h-72 overflow-y-auto"></div>
+        </div>
         <button id="btn-add-client" class="btn-primary px-4 py-2 text-[13px] font-semibold text-white rounded-lg cursor-pointer">+ Add Client</button>
         <button id="btn-sign-out" class="px-3 py-2 text-[13px] font-medium text-[#4a5568] hover:text-[#8892a8] transition-colors cursor-pointer">Sign Out</button>
       </div>
@@ -468,12 +509,12 @@
 
       <!-- View toggle -->
       <div class="flex items-center gap-0.5 bg-white/[0.02] rounded-lg p-0.5 border border-white/[0.04] depth-1">
-        <button id="view-table"   class="filter-pill px-3.5 py-1.5 rounded-md text-[13px] font-medium text-[#64748b] cursor-pointer">Table</button>
-        <button id="view-gantt"   class="filter-pill px-3.5 py-1.5 rounded-md text-[13px] font-medium text-[#64748b] cursor-pointer">Gantt</button>
-        <button id="view-actions" class="filter-pill px-3.5 py-1.5 rounded-md text-[13px] font-medium text-[#64748b] cursor-pointer">Actions</button>
+        <button id="view-table"   class="filter-pill px-3.5 py-1.5 rounded-md text-[13px] font-medium text-[#64748b] cursor-pointer"><span class="hotkey-u">T</span>able</button>
+        <button id="view-gantt"   class="filter-pill px-3.5 py-1.5 rounded-md text-[13px] font-medium text-[#64748b] cursor-pointer"><span class="hotkey-u">G</span>antt</button>
+        <button id="view-actions" class="filter-pill px-3.5 py-1.5 rounded-md text-[13px] font-medium text-[#64748b] cursor-pointer"><span class="hotkey-u">A</span>ctions</button>
       </div>
-      <!-- Bulk Notes button (only shown in table view) -->
-      <button id="btn-bulk-notes" class="btn-secondary px-3.5 py-1.5 text-[13px] font-medium text-[#8892a8] rounded-lg cursor-pointer hidden">Bulk Notes</button>
+      <!-- Bulk Notes button (shown in all views) -->
+      <button id="btn-bulk-notes" class="btn-secondary px-3.5 py-1.5 text-[13px] font-medium text-[#8892a8] rounded-lg cursor-pointer"><span class="hotkey-u">B</span>ulk Notes</button>
       <div id="row-count" class="ml-auto text-[13px] text-[#4a5568] font-mono font-medium"></div>
     </div>
 
@@ -515,6 +556,6 @@
   <script src="dateEngine.js?v=4"></script>
   <script src="addClient.js?v=6"></script>
   <script src="gantt.js?v=5"></script>
-  <script src="app.js?v=6"></script>
+  <script src="app.js?v=7"></script>
 </body>
 </html>
