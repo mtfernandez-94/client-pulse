@@ -1855,7 +1855,7 @@ Return ONLY a JSON array: [{"client":"exact name","note":"their note"}]
 JSON array only:`;
 
   try {
-    const res  = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+    const res  = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${apiKey}`,
       { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ contents:[{parts:[{text:prompt}]}] }) });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error?.message || 'Gemini API error');
