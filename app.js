@@ -266,11 +266,15 @@ function closeSearch() {
   document.getElementById('search-dropdown')?.classList.add('hidden');
   const input = document.getElementById('search-input');
   if (input) input.value = '';
-  // Reset search-all toggle
+  // Reset search-all toggle (text + indigo highlight class)
   if (searchAllClients) {
     searchAllClients = false;
     const btn = document.getElementById('btn-search-all');
-    if (btn) btn.textContent = 'Active only';
+    if (btn) {
+      btn.textContent = 'Active only';
+      btn.classList.remove('text-indigo-400');
+      btn.classList.add('text-[#4a5568]');
+    }
   }
   if (searchQuery) {
     searchQuery = '';
@@ -1324,11 +1328,11 @@ function submitPauseForm(idx) {
     health_before_pause: client.health || '🆕 Onboarding',
     ...(isFuture ? { pending: true } : {}),
   });
-  client.dates = client.dates || {};
-  client.dates.weeks_paused = (client.dates.weeks_paused || 0) + weeks;
-
-  // Only move to paused status immediately if pause starts today or earlier
+  // Only update weeks_paused + status if pause starts today or earlier.
+  // Future pauses: weeks_paused is applied in checkScheduledPauses() when the date arrives.
   if (!isFuture) {
+    client.dates = client.dates || {};
+    client.dates.weeks_paused = (client.dates.weeks_paused || 0) + weeks;
     client.status = 'paused';
     client.health = '⏸️ Pause';
   }
@@ -1348,18 +1352,25 @@ function checkScheduledPauses() {
     if (!client.pause_history || !client.pause_history.length) return;
     const last = client.pause_history[client.pause_history.length - 1];
 
-    // Activate a pending (future-scheduled) pause whose start date has arrived
+    // Activate a pending (future-scheduled) pause whose start date has arrived.
+    // Apply weeks_paused here (not at scheduling time) so dates don't shift early.
+    // Early return to avoid evaluating auto-resume in the same iteration.
     if (client.status === 'active' && last.pending && last.paused_date <= todayStr) {
+      client.dates = client.dates || {};
+      client.dates.weeks_paused = (client.dates.weeks_paused || 0) + last.weeks;
       client.status = 'paused';
       client.health = '⏸️ Pause';
       delete last.pending;
       saveClients(idx);
+      return; // prevent same-iteration double-fire if resumed_date is also past
     }
 
-    // Auto-resume a paused client whose resume date has passed
-    if (client.status === 'paused' && last.resumed_date && last.resumed_date <= todayStr) {
+    // Auto-resume a paused client whose resume date has passed.
+    // _autoResumed flag prevents re-firing on every subsequent render.
+    if (client.status === 'paused' && last.resumed_date && last.resumed_date <= todayStr && !last._autoResumed) {
       client.status = 'active';
       client.health = last.health_before_pause || '🆕 Onboarding';
+      last._autoResumed = true;
       saveClients(idx);
     }
   });
