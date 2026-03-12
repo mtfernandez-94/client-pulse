@@ -414,6 +414,76 @@
     #search-dropdown {
       animation: fade-in-down 0.12s ease forwards;
     }
+
+    /* ── Command Center side pane ─────────────────────────────────────── */
+    #cmd-pane {
+      position: fixed;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      width: 420px;
+      transform: translateX(100%);
+      transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+      z-index: 20;
+      overflow-y: auto;
+      background: linear-gradient(145deg, rgba(10, 13, 19, 0.98), rgba(10, 13, 19, 0.95));
+      border-left: 1px solid rgba(255,255,255,0.06);
+      backdrop-filter: blur(40px);
+      -webkit-backdrop-filter: blur(40px);
+    }
+    #cmd-pane.open { transform: translateX(0); }
+
+    /* Main content squeeze when pane is open */
+    #table-wrap, #gantt-wrap, #actions-wrap {
+      transition: margin-right 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    body.pane-open #table-wrap,
+    body.pane-open #gantt-wrap,
+    body.pane-open #actions-wrap {
+      margin-right: 420px;
+    }
+
+    /* Queue item entrance animation */
+    @keyframes queue-item-in {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .queue-item { animation: queue-item-in 0.2s ease forwards; }
+
+    /* Needs-input pulse for status dots */
+    .status-needs-input {
+      display: inline-block;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #f59e0b;
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+    .status-ready {
+      display: inline-block;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #34d399;
+    }
+
+    /* Command center section transitions */
+    .cmd-section {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+      opacity: 0;
+    }
+    .cmd-section.visible {
+      max-height: 2000px;
+      opacity: 1;
+    }
+
+    /* Mobile: full-width overlay */
+    @media (max-width: 767px) {
+      #cmd-pane { width: 100%; }
+      body.pane-open #table-wrap,
+      body.pane-open #gantt-wrap,
+      body.pane-open #actions-wrap { margin-right: 0; }
+    }
   </style>
 </head>
 <body class="min-h-screen text-[#e2e8f0] font-sans relative">
@@ -450,9 +520,16 @@
         <div class="relative" id="hamburger-wrap">
           <button id="btn-hamburger" title="More options"
             class="btn-secondary w-8 h-8 flex items-center justify-center rounded-lg cursor-pointer text-[#64748b] hover:text-[#8892a8] transition-colors text-lg leading-none">⋯</button>
-          <div id="hamburger-menu" class="hidden absolute left-0 top-full mt-1 w-44 glass rounded-xl border border-white/[0.08] shadow-2xl z-50 py-1">
+          <div id="hamburger-menu" class="hidden absolute left-0 top-full mt-1 w-64 glass rounded-xl border border-white/[0.08] shadow-2xl z-50 py-1">
             <button id="btn-import-json" class="w-full text-left px-4 py-2.5 text-[13px] text-[#8892a8] hover:bg-white/[0.04] hover:text-[#e2e8f0] transition-colors">Import JSON</button>
             <button id="btn-export-csv" class="w-full text-left px-4 py-2.5 text-[13px] text-[#8892a8] hover:bg-white/[0.04] hover:text-[#e2e8f0] transition-colors">Export CSV</button>
+            <div class="border-t border-white/[0.06] my-1"></div>
+            <div id="groq-key-section" class="px-4 py-2.5"></div>
+            <div class="border-t border-white/[0.06] my-1"></div>
+            <div class="px-4 py-2 flex items-center justify-between">
+              <span class="text-[12px] text-[#4a5568]">Confirmation sound</span>
+              <button id="btn-toggle-sound" class="text-[11px] px-2 py-0.5 rounded-md border border-white/[0.06] text-[#8892a8] hover:text-[#e2e8f0] transition-colors cursor-pointer">On</button>
+            </div>
           </div>
         </div>
         <div id="today-display" class="text-[12px] text-[#4a5568] font-mono font-medium tracking-wide ml-2 hidden sm:block"></div>
@@ -514,7 +591,7 @@
         <button id="view-actions" class="filter-pill px-3.5 py-1.5 rounded-md text-[13px] font-medium text-[#64748b] cursor-pointer"><span class="hotkey-u">A</span>ctions</button>
       </div>
       <!-- Bulk Notes button (shown in all views) -->
-      <button id="btn-bulk-notes" class="btn-secondary px-3.5 py-1.5 text-[13px] font-medium text-[#8892a8] rounded-lg cursor-pointer"><span class="hotkey-u">B</span>ulk Notes</button>
+      <button id="btn-bulk-notes" class="btn-secondary px-3.5 py-1.5 text-[13px] font-medium text-[#8892a8] rounded-lg cursor-pointer">Command Center (<span class="hotkey-u">B</span>)</button>
       <div id="row-count" class="ml-auto text-[13px] text-[#4a5568] font-mono font-medium"></div>
     </div>
 
@@ -540,6 +617,57 @@
       <div id="actions-inner"></div>
     </div>
 
+    <!-- ── Command Center side pane ──────────────────────────────────── -->
+    <div id="cmd-pane">
+      <div class="px-5 pt-5 pb-3 flex items-center justify-between border-b border-white/[0.06]">
+        <div>
+          <h2 class="text-[15px] font-semibold text-white tracking-tight">Command Center</h2>
+          <p class="text-[11px] text-[#4a5568] mt-0.5">Dictate notes & actions for multiple clients</p>
+        </div>
+        <button onclick="toggleCmdPane()" class="text-[#4a5568] hover:text-[#8892a8] text-lg transition-colors cursor-pointer">&times;</button>
+      </div>
+      <div class="p-5 space-y-4" id="cmd-pane-body">
+        <!-- Dictation section -->
+        <div>
+          <label class="block text-[11px] font-semibold text-[#4a5568] uppercase tracking-widest font-mono mb-1.5">Dictation</label>
+          <textarea id="cmd-dictation" rows="4" class="input-dark w-full bg-[#0a0d13] border border-white/[0.08] rounded-xl px-3 py-2.5 text-[13px] text-[#e2e8f0] focus:outline-none transition-all placeholder-[#4a5568] resize-none"
+            placeholder="e.g. Flag Matt Callaghan. Pause Bodie starting Saturday. Change Andreas to Cruising. Lee is crushing it."></textarea>
+          <div id="cmd-dictation-history" class="hidden mt-1">
+            <select id="cmd-history-select" class="input-dark w-full bg-[#0a0d13] border border-white/[0.08] rounded-lg px-2 py-1.5 text-[11px] text-[#4a5568] cursor-pointer focus:outline-none">
+              <option value="">Recent dictations…</option>
+            </select>
+          </div>
+        </div>
+        <div class="flex gap-2">
+          <button id="cmd-parse-btn" onclick="parseDictation()" class="btn-secondary flex-1 px-4 py-2 text-[13px] font-medium text-[#8892a8] rounded-lg cursor-pointer">Parse with AI</button>
+          <button id="cmd-history-toggle" onclick="toggleDictationHistory()" class="btn-secondary px-3 py-2 text-[13px] text-[#4a5568] rounded-lg cursor-pointer" title="Recent dictations">▾</button>
+        </div>
+
+        <!-- Notes section (hidden until parse) -->
+        <div id="cmd-notes-section" class="cmd-section">
+          <h3 class="text-[11px] font-semibold text-[#4a5568] uppercase tracking-widest font-mono mb-2">Notes</h3>
+          <div id="cmd-notes-list" class="space-y-2"></div>
+        </div>
+
+        <!-- Actions section (hidden until parse) -->
+        <div id="cmd-actions-section" class="cmd-section">
+          <h3 class="text-[11px] font-semibold text-[#4a5568] uppercase tracking-widest font-mono mb-2">Actions</h3>
+          <div id="cmd-actions-list" class="space-y-2"></div>
+        </div>
+
+        <!-- Error display -->
+        <div id="cmd-error" class="hidden text-rose-400 text-[13px] p-3 rounded-lg bg-rose-500/10 border border-rose-500/20"></div>
+
+        <!-- Confirm bar (hidden until parse) -->
+        <div id="cmd-confirm-bar" class="cmd-section">
+          <div class="flex gap-2">
+            <button id="cmd-confirm-btn" onclick="executeCommandCenter()" class="btn-primary flex-1 px-5 py-2 text-[13px] font-semibold text-white rounded-lg cursor-pointer">Confirm</button>
+            <button onclick="clearCommandCenter()" class="btn-secondary px-4 py-2 text-[13px] font-medium text-[#4a5568] rounded-lg cursor-pointer">Clear</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- ── Modal container ─────────────────────────────────────────── -->
     <div id="add-client-modal" class="hidden"></div>
 
@@ -556,6 +684,6 @@
   <script src="dateEngine.js?v=4"></script>
   <script src="addClient.js?v=6"></script>
   <script src="gantt.js?v=5"></script>
-  <script src="app.js?v=7"></script>
+  <script src="app.js?v=8"></script>
 </body>
 </html>

@@ -643,7 +643,11 @@ function setupEvents() {
   document.getElementById('view-actions')?.addEventListener('click', () => { viewMode = 'actions'; render(); });
   document.getElementById('btn-export-csv')?.addEventListener('click', () => { exportCSV(); closeHamburger(); });
   document.getElementById('btn-import-json')?.addEventListener('click', () => { importBackupJSON(); closeHamburger(); });
-  document.getElementById('btn-bulk-notes')?.addEventListener('click', openBulkNotesModal);
+  document.getElementById('btn-bulk-notes')?.addEventListener('click', toggleCmdPane);
+  // Groq key and sound toggle in hamburger menu
+  renderGroqKeySection();
+  const soundBtn = document.getElementById('btn-toggle-sound');
+  if (soundBtn) { soundBtn.textContent = _cmdSoundEnabled ? 'On' : 'Off'; soundBtn.addEventListener('click', toggleSound); }
 
   // ── Hamburger menu ────────────────────────────────────────────────────────
   document.getElementById('btn-hamburger')?.addEventListener('click', e => {
@@ -717,7 +721,7 @@ function handleGlobalHotkey(e) {
       break;
     case 'b':
       e.preventDefault();
-      openBulkNotesModal();
+      toggleCmdPane();
       break;
     case 't':
       e.preventDefault();
@@ -1558,17 +1562,19 @@ function submitReactivate(idx) {
 
 // ── Toast notifications ────────────────────────────────────────────────────────
 
-function showToast(msg, type = 'success') {
+function showToast(msg, type = 'success', duration = 2800) {
   const container = document.getElementById('toast-container');
   if (!container) return;
   const el = document.createElement('div');
   el.className = `toast ${type}`;
-  el.textContent = msg;
+  // Support HTML content (for undo buttons etc.)
+  if (msg.includes('<')) { el.innerHTML = msg; } else { el.textContent = msg; }
   container.appendChild(el);
   setTimeout(() => {
     el.classList.add('fade-out');
     el.addEventListener('animationend', () => el.remove(), { once: true });
-  }, 2800);
+  }, duration);
+  return el;
 }
 
 // ── Markdown → safe HTML ──────────────────────────────────────────────────────
@@ -1768,191 +1774,605 @@ function renderActionItems() {
     </div>`;
 }
 
-// ── Bulk Notes (Groq) ────────────────────────────────────────────────────────
+// ── Command Center ────────────────────────────────────────────────────────────
+// Persistent right pane with dictation → AI parsing → notes + actions → queue → confirm
 
-function openBulkNotesModal() {
-  const modal = document.getElementById('add-client-modal');
-  if (!modal) return;
-  modal.classList.remove('hidden');
-  const storedKey = localStorage.getItem('cp_groq_key') || '';
-  const inputCls  = 'input-dark w-full bg-[#0a0d13] border border-white/[0.08] rounded-xl px-3 py-2.5 text-[13px] text-[#e2e8f0] focus:outline-none transition-all placeholder-[#4a5568]';
+// -- Utility functions (top-level for reuse) --
 
-  modal.innerHTML = `
-    <div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" onclick="closeModal()"></div>
-    <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div class="modal-panel rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden border border-white/[0.06]">
-        <div class="px-6 pt-6 pb-4 flex items-center justify-between">
-          <div>
-            <h2 class="text-base font-semibold text-white">Bulk Notes Update</h2>
-            <p class="text-[12px] text-[#4a5568] mt-0.5">Dictate notes for multiple clients — AI detects who each note is about.</p>
-          </div>
-          <button type="button" onclick="closeModal()" class="text-[#4a5568] hover:text-[#8892a8] text-lg transition-colors">&times;</button>
-        </div>
-        <div class="px-6 py-4 overflow-y-auto max-h-[65vh] space-y-4">
-          ${storedKey
-            ? `<div class="flex items-center justify-between p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                <span class="text-[12px] text-emerald-400">✓ Groq API key configured</span>
-                <button onclick="localStorage.removeItem('cp_groq_key');openBulkNotesModal();" class="text-[11px] text-[#4a5568] hover:text-rose-400 transition-colors">Remove</button>
-               </div>`
-            : `<div id="bulk-key-section" class="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 space-y-2">
-                <p class="text-[12px] text-amber-400 font-medium">Groq API key required (free at console.groq.com)</p>
-                <input type="password" id="bulk-groq-key" placeholder="Paste API key here" class="${inputCls}">
-                <p class="text-[11px] text-[#4a5568]">Stored in your browser only. Never sent anywhere except Groq.</p>
-               </div>`}
-          <div>
-            <label class="block text-[12px] font-medium text-[#64748b] mb-1.5">Your dictation</label>
-            <textarea id="bulk-notes-text" rows="5" class="${inputCls} resize-none" style="height:auto;"
-              placeholder="e.g. Lee crushing it — up 5 pullups. Claire needs to focus on squat depth. Andreas doing well but form slipping on last sets."></textarea>
-          </div>
-          <div id="bulk-preview" class="hidden space-y-2">
-            <h3 class="text-[11px] font-semibold text-[#4a5568] uppercase tracking-widest font-mono">Parsed — confirm before saving</h3>
-            <div id="bulk-preview-list" class="space-y-2"></div>
-          </div>
-          <div id="bulk-error" class="hidden text-rose-400 text-[13px] p-3 rounded-lg bg-rose-500/10 border border-rose-500/20"></div>
-        </div>
-        <div class="px-6 py-4 border-t border-white/[0.06] flex justify-end gap-2">
-          <button type="button" onclick="closeModal()" class="px-3.5 py-2 text-[13px] font-medium text-[#64748b] hover:text-[#e2e8f0] transition-colors">Cancel</button>
-          <button type="button" id="btn-parse-notes" onclick="parseBulkNotes()" class="btn-secondary px-4 py-2 text-[13px] font-medium text-[#8892a8] rounded-lg cursor-pointer">Parse with AI</button>
-          <button type="button" id="btn-confirm-bulk" onclick="confirmBulkNotes()" class="btn-primary px-5 py-2 text-[13px] font-semibold text-white rounded-lg hidden">Add Notes</button>
-        </div>
-      </div>
-    </div>`;
+function levenshtein(a, b) {
+  const m = a.length, n = b.length;
+  const dp = Array.from({length: m + 1}, () => Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      dp[i][j] = a[i-1] === b[j-1] ? dp[i-1][j-1] : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+  return dp[m][n];
 }
 
-async function parseBulkNotes() {
-  const text     = document.getElementById('bulk-notes-text')?.value?.trim();
-  const keyInput = document.getElementById('bulk-groq-key');
-  const errorEl  = document.getElementById('bulk-error');
-  const parseBtn = document.getElementById('btn-parse-notes');
+function getEligibleClients() {
+  return allClients.filter(c => c.status === 'active' || c.status === 'paused');
+}
+
+function findBestMatch(name) {
+  const input = name.toLowerCase().trim();
+  if (!input) return { idx: -1, matched: false };
+  const eligible = getEligibleClients();
+  let bestIdx = -1, bestDist = Infinity;
+  eligible.forEach((c, i) => {
+    const full = c.name.toLowerCase();
+    if (full === input) { bestIdx = i; bestDist = 0; return; }
+    const dFull = levenshtein(input, full);
+    if (dFull < bestDist) { bestDist = dFull; bestIdx = i; }
+    const first = full.split(' ')[0];
+    const inputFirst = input.split(' ')[0];
+    const dFirst = levenshtein(inputFirst, first);
+    if (dFirst < bestDist) { bestDist = dFirst; bestIdx = i; }
+  });
+  const maxDist = Math.max(3, Math.ceil(input.length * 0.4));
+  if (bestDist > maxDist) return { idx: -1, matched: false };
+  const realIdx = allClients.indexOf(eligible[bestIdx]);
+  return { idx: realIdx, matched: realIdx !== -1 };
+}
+
+// -- Command Center state --
+let _cmdNotes = [];        // [{clientIdx, clientName, note, matched}]
+let _cmdActions = [];      // [{id, type, clientIdx, clientName, matched, params, missingFields, resolved, included, summary}]
+let _cmdUndoBuffer = null; // {snapshots: [{idx, data}], timer}
+let _cmdPaneOpen = false;
+let _cmdSoundEnabled = localStorage.getItem('cp_sound_enabled') !== 'false'; // default on
+
+// Tiny confirmation sound (short click, base64 PCM)
+const CMD_CONFIRM_SOUND = (() => {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    return () => {
+      if (!_cmdSoundEnabled) return;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.frequency.value = 880;
+      osc.type = 'sine';
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.08);
+    };
+  } catch { return () => {}; }
+})();
+
+// -- Groq key management (hamburger menu) --
+
+function renderGroqKeySection() {
+  const el = document.getElementById('groq-key-section');
+  if (!el) return;
+  const key = localStorage.getItem('cp_groq_key');
+  if (key) {
+    el.innerHTML = `<div class="flex items-center justify-between">
+      <span class="text-[12px] text-emerald-400">✓ Groq API key configured</span>
+      <button onclick="localStorage.removeItem('cp_groq_key');renderGroqKeySection();" class="text-[11px] text-[#4a5568] hover:text-rose-400 transition-colors cursor-pointer">Remove</button>
+    </div>`;
+  } else {
+    el.innerHTML = `<div class="space-y-2">
+      <p class="text-[12px] text-amber-400 font-medium">Groq API key required</p>
+      <div class="flex gap-1.5">
+        <input type="password" id="groq-key-input" placeholder="Paste key here" class="input-dark flex-1 bg-[#0a0d13] border border-white/[0.08] rounded-lg px-2.5 py-1.5 text-[12px] text-[#e2e8f0] focus:outline-none placeholder-[#4a5568]">
+        <button onclick="saveGroqKey()" class="btn-secondary px-2.5 py-1.5 text-[11px] text-[#8892a8] rounded-lg cursor-pointer">Save</button>
+      </div>
+      <p class="text-[10px] text-[#4a5568]">Free at console.groq.com — stored in browser only.</p>
+    </div>`;
+  }
+}
+
+function saveGroqKey() {
+  const input = document.getElementById('groq-key-input');
+  if (input?.value?.trim()) {
+    localStorage.setItem('cp_groq_key', input.value.trim());
+    renderGroqKeySection();
+    showToast('Groq API key saved', 'success');
+  }
+}
+
+// -- Sound toggle --
+function toggleSound() {
+  _cmdSoundEnabled = !_cmdSoundEnabled;
+  localStorage.setItem('cp_sound_enabled', _cmdSoundEnabled);
+  const btn = document.getElementById('btn-toggle-sound');
+  if (btn) btn.textContent = _cmdSoundEnabled ? 'On' : 'Off';
+}
+
+// -- Pane toggle --
+
+function toggleCmdPane() {
+  const pane = document.getElementById('cmd-pane');
+  if (!pane) return;
+  _cmdPaneOpen = !_cmdPaneOpen;
+
+  if (_cmdPaneOpen) {
+    pane.classList.add('open');
+    document.body.classList.add('pane-open');
+    // Auto-focus dictation textarea
+    setTimeout(() => document.getElementById('cmd-dictation')?.focus(), 350);
+  } else {
+    // Check for unsaved items
+    if ((_cmdActions.length > 0 || _cmdNotes.length > 0) && !confirm('You have pending items. Close anyway?')) {
+      _cmdPaneOpen = true;
+      return;
+    }
+    pane.classList.remove('open');
+    document.body.classList.remove('pane-open');
+  }
+}
+
+// -- Dictation history --
+
+function getDictationHistory() {
+  try { return JSON.parse(localStorage.getItem('cp_dictation_history') || '[]'); } catch { return []; }
+}
+
+function saveDictationHistory(text) {
+  if (!text?.trim()) return;
+  let history = getDictationHistory();
+  history = [text.trim(), ...history.filter(h => h !== text.trim())].slice(0, 5);
+  localStorage.setItem('cp_dictation_history', JSON.stringify(history));
+}
+
+function toggleDictationHistory() {
+  const wrap = document.getElementById('cmd-dictation-history');
+  const sel = document.getElementById('cmd-history-select');
+  if (!wrap || !sel) return;
+  const history = getDictationHistory();
+  if (history.length === 0) { showToast('No recent dictations', 'info'); return; }
+  sel.innerHTML = '<option value="">Recent dictations…</option>' +
+    history.map((h, i) => `<option value="${i}">${h.slice(0, 60)}${h.length > 60 ? '…' : ''}</option>`).join('');
+  wrap.classList.toggle('hidden');
+  sel.onchange = () => {
+    const idx = parseInt(sel.value);
+    if (!isNaN(idx) && history[idx]) {
+      document.getElementById('cmd-dictation').value = history[idx];
+      wrap.classList.add('hidden');
+    }
+  };
+}
+
+// -- Parse dictation (main AI call) --
+
+async function parseDictation() {
+  const text = document.getElementById('cmd-dictation')?.value?.trim();
+  const errorEl = document.getElementById('cmd-error');
+  const parseBtn = document.getElementById('cmd-parse-btn');
   errorEl.classList.add('hidden');
 
-  if (keyInput?.value?.trim()) {
-    localStorage.setItem('cp_groq_key', keyInput.value.trim());
-    // Swap the amber key-entry section for the green "configured" banner
-    const keySection = document.getElementById('bulk-key-section');
-    if (keySection) {
-      keySection.outerHTML = `<div class="flex items-center justify-between p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-        <span class="text-[12px] text-emerald-400">✓ Groq API key configured</span>
-        <button onclick="localStorage.removeItem('cp_groq_key');openBulkNotesModal();" class="text-[11px] text-[#4a5568] hover:text-rose-400 transition-colors">Remove</button>
-      </div>`;
-    }
-  }
   const apiKey = localStorage.getItem('cp_groq_key');
-  if (!apiKey) { errorEl.textContent = 'Enter your Groq API key first.'; errorEl.classList.remove('hidden'); return; }
-  if (!text)   { errorEl.textContent = 'Enter some notes to parse.';      errorEl.classList.remove('hidden'); return; }
+  if (!apiKey) { showToast('Set your Groq API key in ⋯ menu first', 'error'); return; }
+  if (!text) { errorEl.textContent = 'Enter some notes to parse.'; errorEl.classList.remove('hidden'); return; }
 
   parseBtn.textContent = 'Parsing…';
-  parseBtn.disabled    = true;
+  parseBtn.disabled = true;
 
-  // Only include active + paused clients (never archived)
-  const eligibleClients = allClients.filter(c => c.status === 'active' || c.status === 'paused');
-  const clientList = eligibleClients.map((c, i) => `${i + 1}. ${c.name}`).join('\n');
-  const prompt = `You are a coaching notes parser. Match each note to a client from the numbered list below.
+  const eligible = getEligibleClients();
+  const clientList = eligible.map((c, i) => `${i + 1}. ${c.name} [current health: ${c.health || 'unknown'}]`).join('\n');
+  const today = todayISO();
 
-CLIENT LIST:
+  const healthOptions = schemaCache?.fields?.health?.options?.join(', ') || '"🆕 Onboarding", "✅ Momentum", "🔸 Cruising", "🚩 Attention", "⏸️ Pause"';
+  const termOptions = Object.keys(termToDays).join(', ') || '"12wks", "16wks", "6mth", "12mth"';
+
+  const prompt = `You are a coaching client management assistant. Parse the dictation below and extract NOTES and ACTIONS.
+
+CRITICAL RULE: ONLY create actions for EXPLICIT instructions to change client data.
+- Observations and sentiment are NOTES only (e.g. "Lee is crushing it" → NOTE, not a health change)
+- Only create actions when the user explicitly says "change to", "move to", "set to", "flag", "pause", "renew", "mark review", "new program date", or similar DIRECTIVE language
+- If someone says a client "is doing great" or "needs work", that is a NOTE. They must explicitly instruct a change for it to become an ACTION.
+
+CLIENT LIST (only these names are valid):
 ${clientList}
+
+VALID HEALTH VALUES: ${healthOptions}
+VALID CONTRACT TERMS: ${termOptions}
+
+TODAY'S DATE: ${today}
 
 DICTATION:
 "${text}"
 
-RULES:
-- Return ONLY a JSON array: [{"client":"exact full name from list","note":"the note"}]
-- Use the EXACT name spelling from the list above — do not modify it.
-- Match by closest name even if abbreviated or misspelled (e.g. "Nick Del" → "Nick Delta").
-- If NO client in the list is a reasonable match, set client to null. Do NOT guess wildly.
-- Only include clients that are actually mentioned in the dictation.
+Return ONLY valid JSON:
+{
+  "notes": [{"client": "exact name from list", "note": "the observation text"}],
+  "actions": [
+    {
+      "type": "health_change|flag|program_start|renewal|pause|review",
+      "client": "exact name from list",
+      "params": {},
+      "summary": "human-readable description"
+    }
+  ]
+}
 
-JSON array only:`;
+PARAMS by type:
+- health_change: {"new_health": "one of the valid health values (with emoji)"}
+- flag: {"reason": "string or null if not mentioned"}
+- program_start: {"date": "YYYY-MM-DD or null if unclear"}
+- renewal: {"outcome": "renewed|churned|paused", "new_term": "term or null", "new_program_start": "YYYY-MM-DD or null", "notes": "string or null"}
+- pause: {"start_date": "YYYY-MM-DD or null", "end_date": "YYYY-MM-DD or null", "weeks": number or null, "reason": "string or null"}
+- review: {"review_number": 1-6, "notes": "string or null"}
+
+RULES:
+- Use EXACT name spelling from the client list. Match closest name even if abbreviated.
+- If no client reasonably matches, set client to null.
+- A single mention can produce BOTH a note AND an action.
+- Resolve relative dates ("this Saturday", "next week") using today's date.
+- Set params fields to null when information was not mentioned.
+JSON only:`;
 
   try {
-    const res  = await fetch('https://api.groq.com/openai/v1/chat/completions',
-      { method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`},
-        body: JSON.stringify({ model:'llama-3.3-70b-versatile', messages:[{role:'user',content:prompt}], temperature:0.1 }) });
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: [{ role: 'user', content: prompt }], temperature: 0.1 })
+    });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error?.message || 'Groq API error');
-    const raw   = data.choices?.[0]?.message?.content || '';
-    const match = raw.match(/\[[\s\S]*\]/);
-    if (!match) throw new Error('Could not parse AI response. Try rephrasing your notes.');
-    const parsed = JSON.parse(match[0]);
+    const raw = data.choices?.[0]?.message?.content || '';
 
-    // Levenshtein distance for fuzzy matching
-    function levenshtein(a, b) {
-      const m = a.length, n = b.length;
-      const dp = Array.from({length: m + 1}, () => Array(n + 1).fill(0));
-      for (let i = 0; i <= m; i++) dp[i][0] = i;
-      for (let j = 0; j <= n; j++) dp[0][j] = j;
-      for (let i = 1; i <= m; i++)
-        for (let j = 1; j <= n; j++)
-          dp[i][j] = a[i-1] === b[j-1] ? dp[i-1][j-1] : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
-      return dp[m][n];
-    }
+    // Parse the JSON response — find the outermost { }
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('Could not parse AI response. Try rephrasing.');
+    const parsed = JSON.parse(jsonMatch[0]);
 
-    function findBestMatch(name) {
-      const input = name.toLowerCase().trim();
-      if (!input) return { idx: -1, matched: false };
-      let bestIdx = -1, bestDist = Infinity;
-      eligibleClients.forEach((c, i) => {
-        const full = c.name.toLowerCase();
-        // Exact match
-        if (full === input) { bestIdx = i; bestDist = 0; return; }
-        // Distance on full name
-        const dFull = levenshtein(input, full);
-        if (dFull < bestDist) { bestDist = dFull; bestIdx = i; }
-        // Distance on first name only
-        const first = full.split(' ')[0];
-        const inputFirst = input.split(' ')[0];
-        const dFirst = levenshtein(inputFirst, first);
-        if (dFirst < bestDist) { bestDist = dFirst; bestIdx = i; }
-      });
-      // Reject if edit distance is more than 40% of the input length — too far off
-      const maxDist = Math.max(3, Math.ceil(input.length * 0.4));
-      if (bestDist > maxDist) return { idx: -1, matched: false };
-      // Map back to allClients index
-      const realIdx = allClients.indexOf(eligibleClients[bestIdx]);
-      return { idx: realIdx, matched: realIdx !== -1 };
-    }
-
-    window._bulkPayload = parsed.map(item => {
-      const { idx, matched } = findBestMatch(item.client || '');
-      return { ...item, idx, matched };
-    });
-
-    document.getElementById('bulk-preview').classList.remove('hidden');
-    document.getElementById('btn-confirm-bulk').classList.remove('hidden');
-    document.getElementById('bulk-preview-list').innerHTML = window._bulkPayload.map((item, i) => {
-      const label = item.matched ? allClients[item.idx].name : (item.client || 'Unknown — no match');
-      const cls   = item.matched ? 'border-emerald-500/20 bg-emerald-500/5' : 'border-rose-500/20 bg-rose-500/5';
-      const nc    = item.matched ? 'text-emerald-400' : 'text-rose-400';
-      return `<div class="p-3 rounded-lg border ${cls} flex items-start gap-3">
-        <div class="flex-1 min-w-0">
-          <div class="text-[12px] font-semibold ${nc} mb-1">${label}</div>
-          <div class="text-[13px] text-[#8892a8]">${item.note}</div>
-        </div>
-        <button onclick="window._bulkPayload.splice(${i},1);this.closest('div[class*=rounded]').remove();" class="text-[#4a5568] hover:text-rose-400 text-sm transition-colors flex-shrink-0 mt-0.5">✕</button>
-      </div>`;
-    }).join('');
-  } catch(e) {
+    saveDictationHistory(text);
+    processLLMResponse(parsed);
+  } catch (e) {
     errorEl.textContent = e.message || 'Parsing failed.';
     errorEl.classList.remove('hidden');
   } finally {
     parseBtn.textContent = 'Parse with AI';
-    parseBtn.disabled    = false;
+    parseBtn.disabled = false;
   }
 }
 
-function confirmBulkNotes() {
-  const payload = (window._bulkPayload || []).filter(item => item.matched);
-  if (!payload.length) { showToast('No matched clients', 'info'); return; }
-  payload.forEach(item => {
-    const client = allClients[item.idx];
+// -- Process LLM response into notes + actions --
+
+function computeMissingFields(type, params) {
+  const missing = [];
+  switch (type) {
+    case 'health_change':
+      if (!params.new_health) missing.push('new_health');
+      break;
+    case 'program_start':
+      if (!params.date) missing.push('date');
+      break;
+    case 'pause':
+      if (!params.weeks && (!params.start_date || !params.end_date)) missing.push('duration');
+      break;
+    case 'review':
+      if (!params.review_number) missing.push('review_number');
+      break;
+    case 'renewal':
+      if (!params.outcome) missing.push('outcome');
+      break;
+  }
+  return missing;
+}
+
+function processLLMResponse(parsed) {
+  // Process notes
+  _cmdNotes = (parsed.notes || []).map(item => {
+    const { idx, matched } = findBestMatch(item.client || '');
+    return { clientIdx: idx, clientName: matched ? allClients[idx].name : (item.client || 'Unknown'), note: item.note, matched };
+  });
+
+  // Process actions
+  _cmdActions = (parsed.actions || []).map(action => {
+    const { idx, matched } = findBestMatch(action.client || '');
+    const params = action.params || {};
+    const missingFields = computeMissingFields(action.type, params);
+    return {
+      id: crypto.randomUUID(),
+      type: action.type,
+      clientIdx: idx,
+      clientName: matched ? allClients[idx].name : (action.client || 'Unknown'),
+      matched,
+      params,
+      missingFields,
+      resolved: missingFields.length === 0,
+      included: matched,
+      summary: action.summary || ''
+    };
+  });
+
+  // Detect conflicts (multiple health-affecting actions on same client)
+  const healthActions = _cmdActions.filter(a => a.type === 'health_change' || a.type === 'flag');
+  const grouped = {};
+  healthActions.forEach(a => {
+    if (a.clientIdx >= 0) {
+      grouped[a.clientIdx] = grouped[a.clientIdx] || [];
+      grouped[a.clientIdx].push(a.id);
+    }
+  });
+  Object.values(grouped).forEach(ids => {
+    if (ids.length > 1) {
+      ids.forEach(id => {
+        const a = _cmdActions.find(x => x.id === id);
+        if (a) a._conflict = true;
+      });
+    }
+  });
+
+  renderCmdNotes();
+  renderCmdActions();
+  updateConfirmBar();
+
+  // Show sections
+  if (_cmdNotes.length > 0) document.getElementById('cmd-notes-section')?.classList.add('visible');
+  if (_cmdActions.length > 0) document.getElementById('cmd-actions-section')?.classList.add('visible');
+  if (_cmdNotes.length > 0 || _cmdActions.length > 0) document.getElementById('cmd-confirm-bar')?.classList.add('visible');
+}
+
+// -- Render notes list --
+
+function renderCmdNotes() {
+  const list = document.getElementById('cmd-notes-list');
+  if (!list) return;
+  list.innerHTML = _cmdNotes.map((n, i) => {
+    const cls = n.matched ? 'border-emerald-500/20 bg-emerald-500/5' : 'border-rose-500/20 bg-rose-500/5';
+    const nc = n.matched ? 'text-emerald-400' : 'text-rose-400';
+    return `<div class="queue-item p-3 rounded-lg border ${cls} flex items-start gap-3" style="animation-delay:${i * 50}ms">
+      <div class="flex-1 min-w-0">
+        <div class="text-[12px] font-semibold ${nc} mb-1">${n.clientName}</div>
+        <div class="text-[13px] text-[#8892a8]">${n.note}</div>
+      </div>
+      <button onclick="_cmdNotes.splice(${i},1);renderCmdNotes();updateConfirmBar();" class="text-[#4a5568] hover:text-rose-400 text-sm transition-colors flex-shrink-0 mt-0.5 cursor-pointer">✕</button>
+    </div>`;
+  }).join('');
+}
+
+// -- Render actions list --
+
+function renderCmdActions() {
+  const list = document.getElementById('cmd-actions-list');
+  if (!list) return;
+  list.innerHTML = _cmdActions.map((a, i) => {
+    const statusDot = a.resolved ? '<span class="status-ready"></span>' : '<span class="status-needs-input"></span>';
+    const border = a.resolved ? 'border-emerald-500/20 bg-emerald-500/5' : 'border-amber-500/20 bg-amber-500/5';
+    const conflict = a._conflict ? '<span class="text-[10px] text-amber-400 ml-2">⚠ conflict</span>' : '';
+    const typeBadge = getActionTypeBadge(a.type);
+    const checked = a.included ? 'checked' : '';
+
+    let fieldsHtml = '';
+    if (!a.resolved) {
+      fieldsHtml = renderMissingFields(a, i);
+    }
+
+    return `<div class="queue-item p-3 rounded-lg border ${border} space-y-2" style="animation-delay:${i * 50}ms">
+      <div class="flex items-center gap-2">
+        <input type="checkbox" ${checked} onchange="_cmdActions[${i}].included=this.checked;updateConfirmBar();"
+          class="w-3.5 h-3.5 rounded border-white/[0.2] bg-transparent cursor-pointer accent-indigo-400">
+        <span class="text-[11px] font-mono font-semibold uppercase tracking-wider ${typeBadge.color}">${typeBadge.label}</span>
+        ${conflict}
+        <span class="ml-auto">${statusDot}</span>
+      </div>
+      <div class="text-[12px] font-semibold ${a.matched ? 'text-[#e2e8f0]' : 'text-rose-400'}">${a.clientName}</div>
+      <div class="text-[12px] text-[#8892a8]">${a.summary}</div>
+      ${fieldsHtml}
+    </div>`;
+  }).join('');
+}
+
+function getActionTypeBadge(type) {
+  const map = {
+    health_change: { label: '✅ Health', color: 'text-emerald-400' },
+    flag: { label: '🚩 Flag', color: 'text-amber-400' },
+    program_start: { label: '📅 Program', color: 'text-indigo-400' },
+    renewal: { label: '🔄 Renewal', color: 'text-cyan-400' },
+    pause: { label: '⏸️ Pause', color: 'text-amber-400' },
+    review: { label: '📋 Review', color: 'text-violet-400' }
+  };
+  return map[type] || { label: type, color: 'text-[#8892a8]' };
+}
+
+function renderMissingFields(action, idx) {
+  const inputCls = 'input-dark bg-[#0a0d13] border border-white/[0.08] rounded-lg px-2.5 py-1.5 text-[12px] text-[#e2e8f0] focus:outline-none placeholder-[#4a5568]';
+  let html = '<div class="space-y-1.5 mt-1 pl-5">';
+
+  if (action.type === 'health_change' && action.missingFields.includes('new_health')) {
+    const opts = (schemaCache?.fields?.health?.options || []).map(o => `<option value="${o}">${o}</option>`).join('');
+    html += `<select onchange="updateActionParam(${idx},'new_health',this.value)" class="${inputCls} w-full cursor-pointer"><option value="">Select health…</option>${opts}</select>`;
+  }
+  if (action.type === 'flag') {
+    html += `<input type="text" placeholder="Flag reason (optional)" value="${action.params.reason || ''}"
+      onchange="updateActionParam(${idx},'reason',this.value)" class="${inputCls} w-full">`;
+  }
+  if (action.type === 'program_start' && action.missingFields.includes('date')) {
+    html += `<input type="date" onchange="updateActionParam(${idx},'date',this.value)" class="${inputCls} w-full cmd-date-${idx}">`;
+  }
+  if (action.type === 'pause' && action.missingFields.includes('duration')) {
+    html += `<div class="flex gap-2">
+      <input type="date" placeholder="End date" onchange="updateActionParam(${idx},'end_date',this.value)" class="${inputCls} flex-1 cmd-date-${idx}">
+      <span class="text-[11px] text-[#4a5568] self-center">or</span>
+      <input type="number" placeholder="Weeks" min="1" max="52" onchange="updateActionParam(${idx},'weeks',parseInt(this.value)||null)" class="${inputCls} w-20">
+    </div>`;
+  }
+  if (action.type === 'renewal' && action.missingFields.includes('outcome')) {
+    html += `<select onchange="updateActionParam(${idx},'outcome',this.value)" class="${inputCls} w-full cursor-pointer">
+      <option value="">Select outcome…</option><option value="renewed">Renewed</option><option value="churned">Churned</option><option value="paused">Paused</option>
+    </select>`;
+  }
+  if (action.type === 'review' && action.missingFields.includes('review_number')) {
+    html += `<select onchange="updateActionParam(${idx},'review_number',parseInt(this.value)||null)" class="${inputCls} w-full cursor-pointer">
+      <option value="">Select review…</option>${[1,2,3,4,5,6].map(n => `<option value="${n}">Review ${n}</option>`).join('')}
+    </select>`;
+  }
+
+  html += '</div>';
+  return html;
+}
+
+function updateActionParam(idx, field, value) {
+  const action = _cmdActions[idx];
+  if (!action) return;
+  action.params[field] = value;
+  action.missingFields = computeMissingFields(action.type, action.params);
+  action.resolved = action.missingFields.length === 0;
+  renderCmdActions();
+  updateConfirmBar();
+}
+
+function updateConfirmBar() {
+  const ready = _cmdActions.filter(a => a.included && a.resolved && a.matched).length;
+  const total = _cmdActions.filter(a => a.matched).length;
+  const noteCount = _cmdNotes.filter(n => n.matched).length;
+  const btn = document.getElementById('cmd-confirm-btn');
+  if (btn) {
+    const parts = [];
+    if (noteCount > 0) parts.push(`${noteCount} note${noteCount !== 1 ? 's' : ''}`);
+    if (ready > 0) parts.push(`${ready}/${total} action${total !== 1 ? 's' : ''}`);
+    btn.textContent = parts.length > 0 ? `Confirm ${parts.join(' + ')}` : 'Nothing to confirm';
+    btn.disabled = noteCount === 0 && ready === 0;
+  }
+}
+
+// -- Execute all confirmed notes + actions --
+
+function executeCommandCenter() {
+  const notes = _cmdNotes.filter(n => n.matched);
+  const actions = _cmdActions.filter(a => a.included && a.resolved && a.matched);
+  if (notes.length === 0 && actions.length === 0) { showToast('Nothing to apply', 'info'); return; }
+
+  // Build undo buffer — snapshot affected clients before mutation
+  const affectedIndices = new Set();
+  notes.forEach(n => affectedIndices.add(n.clientIdx));
+  actions.forEach(a => affectedIndices.add(a.clientIdx));
+  _cmdUndoBuffer = {
+    snapshots: [...affectedIndices].map(idx => ({ idx, data: JSON.parse(JSON.stringify(allClients[idx])) })),
+    timer: null
+  };
+
+  // Apply notes
+  notes.forEach(n => {
+    const client = allClients[n.clientIdx];
     if (!client) return;
     if (!client.client_notes) client.client_notes = [];
-    client.client_notes.push({ id: crypto.randomUUID(), date: new Date().toISOString(), note: item.note });
-    saveClients(item.idx);
+    client.client_notes.push({ id: crypto.randomUUID(), date: new Date().toISOString(), note: n.note });
+    saveClients(n.clientIdx);
   });
-  closeModal();
-  showToast(`Notes added to ${payload.length} client${payload.length !== 1 ? 's' : ''}`);
-  window._bulkPayload = null;
+
+  // Apply actions
+  let skipped = 0;
+  actions.forEach(a => {
+    const client = allClients[a.clientIdx];
+    if (!client) { skipped++; return; }
+
+    switch (a.type) {
+      case 'health_change': {
+        const valid = schemaCache?.fields?.health?.options || [];
+        if (valid.length > 0 && !valid.includes(a.params.new_health)) { skipped++; showToast(`Invalid health: ${a.params.new_health}`, 'error'); return; }
+        client.health = a.params.new_health;
+        if (a.params.new_health !== '🚩 Attention') client.flag_reason = '';
+        break;
+      }
+      case 'flag':
+        client.health = '🚩 Attention';
+        client.flag_reason = a.params.reason || '';
+        break;
+      case 'program_start':
+        client.dates = client.dates || {};
+        client.dates.program_start = a.params.date;
+        break;
+      case 'renewal': {
+        if (client.renewal?.status !== 'pending') { skipped++; showToast(`${client.name}: renewal not pending`, 'info'); return; }
+        client.renewal = { status: a.params.outcome, actioned_date: todayISO(), notes: null };
+        if (a.params.outcome === 'renewed') {
+          if (a.params.new_program_start) client.dates.program_start = a.params.new_program_start;
+          if (a.params.new_term) client.contract = { ...client.contract, term: a.params.new_term };
+        }
+        if (a.params.notes) {
+          if (!client.client_notes) client.client_notes = [];
+          client.client_notes.push({ id: crypto.randomUUID(), date: new Date().toISOString(), note: `**Renewal: ${a.params.outcome}**\n${a.params.notes}` });
+        }
+        break;
+      }
+      case 'pause': {
+        if (client.status !== 'active') { skipped++; showToast(`${client.name}: not active, can't pause`, 'info'); return; }
+        const startDate = a.params.start_date || todayISO();
+        let endDate = a.params.end_date;
+        let weeks = a.params.weeks;
+        if (!endDate && weeks) {
+          const sd = new Date(startDate);
+          sd.setDate(sd.getDate() + weeks * 7);
+          endDate = sd.toISOString().slice(0, 10);
+        }
+        if (!endDate) { skipped++; return; }
+        if (!weeks) {
+          const diff = (new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60 * 24);
+          weeks = Math.round(diff / 7);
+        }
+        const isFuture = startDate > todayISO();
+        if (!client.pause_history) client.pause_history = [];
+        client.pause_history.push({
+          paused_date: startDate,
+          resumed_date: endDate,
+          weeks,
+          reason: a.params.reason || '',
+          health_before_pause: client.health,
+          ...(isFuture ? { pending: true } : {})
+        });
+        if (!isFuture) {
+          client.dates.weeks_paused = (client.dates.weeks_paused || 0) + weeks;
+          client.status = 'paused';
+          client.health = '⏸️ Pause';
+        }
+        break;
+      }
+      case 'review': {
+        const key = `review_${a.params.review_number}`;
+        client.reviews = client.reviews || {};
+        if (client.reviews[key]?.completed) { skipped++; showToast(`${client.name}: review ${a.params.review_number} already complete`, 'info'); return; }
+        client.reviews[key] = { ...(client.reviews[key] || {}), completed: true, completed_date: todayISO(), notes: a.params.notes || '' };
+        break;
+      }
+    }
+    saveClients(a.clientIdx);
+  });
+
+  // Play confirmation sound
+  CMD_CONFIRM_SOUND();
+
+  // Show undo toast
+  const applied = notes.length + actions.length - skipped;
+  const toastEl = showToast(`Applied ${applied} change${applied !== 1 ? 's' : ''}${skipped > 0 ? ` (${skipped} skipped)` : ''} — <button onclick="undoCommandCenter()" class="underline font-semibold">Undo</button>`, 'success', 30000);
+
+  // Clear undo buffer after 30s
+  _cmdUndoBuffer.timer = setTimeout(() => { _cmdUndoBuffer = null; }, 30000);
+
+  // Clear pane for next batch (keep pane open — "Add more" flow)
+  clearCommandCenter();
+  render();
+  renderStats();
+}
+
+function undoCommandCenter() {
+  if (!_cmdUndoBuffer) { showToast('Nothing to undo', 'info'); return; }
+  clearTimeout(_cmdUndoBuffer.timer);
+  _cmdUndoBuffer.snapshots.forEach(({ idx, data }) => {
+    allClients[idx] = data;
+    saveClients(idx);
+  });
+  _cmdUndoBuffer = null;
+  render();
+  renderStats();
+  showToast('Changes undone', 'info');
+}
+
+function clearCommandCenter() {
+  _cmdNotes = [];
+  _cmdActions = [];
+  document.getElementById('cmd-dictation').value = '';
+  document.getElementById('cmd-notes-section')?.classList.remove('visible');
+  document.getElementById('cmd-actions-section')?.classList.remove('visible');
+  document.getElementById('cmd-confirm-bar')?.classList.remove('visible');
+  document.getElementById('cmd-notes-list').innerHTML = '';
+  document.getElementById('cmd-actions-list').innerHTML = '';
+  document.getElementById('cmd-error')?.classList.add('hidden');
 }
 
 // ── Auth handlers ─────────────────────────────────────────────────────────────
