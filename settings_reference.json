@@ -23,7 +23,12 @@
       "Bash(mkdir *)",
       "Bash(cp *)",
       "Bash(mv *)",
-      "Bash(echo *)"
+      "Bash(echo *)",
+      "Bash(date:*)",
+      "Bash(wc:*)",
+      "Bash(sort:*)",
+      "Bash(tr:*)",
+      "Bash(git tag:*)"
     ],
     "deny": [
       "Bash(rm -rf *)",

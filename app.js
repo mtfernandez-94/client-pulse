@@ -12,7 +12,7 @@ let filterHealth = '';
 let filterTerm   = '';
 let sortCol = 'renewalUrgency';
 let sortDir = 'asc';
-let viewMode = 'table'; // 'table' | 'gantt' | 'actions'
+let viewMode = 'table'; // 'table' | 'gantt' | 'actions' | 'analytics'
 let _lastAutoBackup = 0; // timestamp of last auto-backup
 let searchQuery = '';     // current search text
 let searchAllClients = false; // true = include paused/archived in search dropdown
@@ -395,6 +395,7 @@ function render() {
     document.getElementById('table-wrap').classList.add('hidden');
     document.getElementById('gantt-wrap').classList.remove('hidden');
     document.getElementById('actions-wrap').classList.add('hidden');
+    document.getElementById('analytics-wrap')?.classList.add('hidden');
     document.getElementById('btn-bulk-notes')?.classList.remove('hidden');
     renderGantt();
     return;
@@ -404,14 +405,26 @@ function render() {
     document.getElementById('table-wrap').classList.add('hidden');
     document.getElementById('gantt-wrap').classList.add('hidden');
     document.getElementById('actions-wrap').classList.remove('hidden');
+    document.getElementById('analytics-wrap')?.classList.add('hidden');
     document.getElementById('btn-bulk-notes')?.classList.remove('hidden');
     renderActionItems();
+    return;
+  }
+
+  if (viewMode === 'analytics') {
+    document.getElementById('table-wrap').classList.add('hidden');
+    document.getElementById('gantt-wrap').classList.add('hidden');
+    document.getElementById('actions-wrap').classList.add('hidden');
+    document.getElementById('analytics-wrap')?.classList.remove('hidden');
+    document.getElementById('btn-bulk-notes')?.classList.add('hidden');
+    renderAnalytics();
     return;
   }
 
   document.getElementById('table-wrap').classList.remove('hidden');
   document.getElementById('gantt-wrap').classList.add('hidden');
   document.getElementById('actions-wrap').classList.add('hidden');
+  document.getElementById('analytics-wrap')?.classList.add('hidden');
   document.getElementById('btn-bulk-notes')?.classList.remove('hidden');
   const colspan = tableColumns.length;
   const tbody = document.getElementById('tbody');
@@ -641,6 +654,7 @@ function setupEvents() {
   document.getElementById('view-table')?.addEventListener('click', () => { viewMode = 'table'; render(); });
   document.getElementById('view-gantt')?.addEventListener('click', () => { viewMode = 'gantt'; render(); });
   document.getElementById('view-actions')?.addEventListener('click', () => { viewMode = 'actions'; render(); });
+  document.getElementById('view-analytics')?.addEventListener('click', () => { viewMode = 'analytics'; render(); });
   document.getElementById('btn-export-csv')?.addEventListener('click', () => { exportCSV(); closeHamburger(); });
   document.getElementById('btn-import-json')?.addEventListener('click', () => { importBackupJSON(); closeHamburger(); });
   document.getElementById('btn-bulk-notes')?.addEventListener('click', toggleCmdPane);
@@ -738,11 +752,16 @@ function handleGlobalHotkey(e) {
       viewMode = 'actions';
       render();
       break;
+    case 'n':
+      e.preventDefault();
+      viewMode = 'analytics';
+      render();
+      break;
   }
 }
 
 function updateViewToggle() {
-  const viewMap = { 'view-table': 'table', 'view-gantt': 'gantt', 'view-actions': 'actions' };
+  const viewMap = { 'view-table': 'table', 'view-gantt': 'gantt', 'view-actions': 'actions', 'view-analytics': 'analytics' };
   Object.entries(viewMap).forEach(([id, mode]) => {
     const btn = document.getElementById(id);
     if (!btn) return;
@@ -1496,14 +1515,75 @@ function submitRenewal(idx) {
 
 // ── Archive / Reactivate ──────────────────────────────────────────────────────
 
-function confirmArchive(idx) {
+function confirmArchive(idx) { showArchiveForm(idx); }
+
+function showArchiveForm(idx) {
   const client = allClients[idx];
   if (!client || (client.status !== 'active' && client.status !== 'paused')) return;
+  const modal = document.getElementById('add-client-modal');
+  if (!modal) return;
+  const inputCls = 'input-dark w-full bg-[#0a0d13] border border-white/[0.08] rounded-lg px-3 py-2.5 text-[13px] text-[#e2e8f0] focus:outline-none transition-all placeholder-[#4a5568]';
+  modal.classList.remove('hidden');
+  modal.innerHTML = `
+    <div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" onclick="closeModal()"></div>
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div class="modal-panel rounded-2xl w-full max-w-lg border border-white/[0.06]">
+        <div class="px-6 pt-6 pb-4 flex items-center justify-between">
+          <h2 class="text-base font-semibold text-white">Archive: ${client.name}</h2>
+          <button type="button" onclick="closeModal()" class="text-[#4a5568] hover:text-[#8892a8] text-lg leading-none transition-colors">&times;</button>
+        </div>
+        <div class="px-6 py-5 space-y-4">
+          <div>
+            <label class="block text-[12px] font-medium text-[#64748b] mb-1">Reason</label>
+            <select id="archive-reason" class="${inputCls}">
+              <option value="churn">Churn — counts toward churn metrics</option>
+              <option value="deferred">Deferred — does not count as churn</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[12px] font-medium text-[#64748b] mb-1">Archived on</label>
+            <input type="text" id="archive-date" class="${inputCls}" placeholder="Select date…">
+          </div>
+          <div>
+            <label class="block text-[12px] font-medium text-[#64748b] mb-1">Notes (optional) — saved to Client Notes</label>
+            <textarea id="archive-notes" rows="3" class="${inputCls} resize-none" placeholder="e.g. completed 12mth, didn't renew · cancelled mid-contract · injury, may return…"></textarea>
+          </div>
+        </div>
+        <div class="px-6 py-4 border-t border-white/[0.06] flex justify-end gap-2">
+          <button type="button" onclick="closeModal()" class="px-3.5 py-2 text-[13px] font-medium text-[#64748b] hover:text-[#e2e8f0] transition-colors">Cancel</button>
+          <button type="button" onclick="submitArchive(${idx})" class="px-5 py-2 btn-primary text-[13px] font-semibold text-white rounded-lg">Archive</button>
+        </div>
+      </div>
+    </div>`;
+  if (window.flatpickr) {
+    flatpickr('#archive-date', { ...FP_CFG, defaultDate: todayISO() });
+  }
+}
+
+function submitArchive(idx) {
+  const client = allClients[idx];
+  if (!client) return;
+  const reason     = document.getElementById('archive-reason')?.value || 'churn';
+  const archivedAt = document.getElementById('archive-date')?.value || todayISO();
+  const notes      = document.getElementById('archive-notes')?.value?.trim() || null;
+
   client.status = 'archived';
+  client.archive = { reason, archived_at: archivedAt, notes };
+
+  if (notes) {
+    if (!client.client_notes) client.client_notes = [];
+    client.client_notes.push({
+      id:   crypto.randomUUID(),
+      date: new Date().toISOString(),
+      note: `**Archived: ${reason}**\n${notes}`,
+    });
+  }
+
   saveClients(idx);
   closeModal();
   render();
   renderStats();
+  showToast(`${client.name} archived — ${reason}`);
 }
 
 function showReactivateForm(idx) {
@@ -1554,10 +1634,226 @@ function submitReactivate(idx) {
   client.dates.program_start = programStart;
   if (term) client.contract = { ...client.contract, term };
   client.renewal = { status: 'pending' };
+  client.archive = {};
   saveClients(idx);
   closeModal();
   render();
   renderStats();
+}
+
+// ── Analytics view ─────────────────────────────────────────────────────────────
+
+function renderAnalytics() {
+  const wrap = document.getElementById('analytics-inner');
+  if (!wrap) return;
+
+  const today = getToday();
+  const t90        = trailing90DayChurn(allClients, today);
+  const avgLife    = avgLifetimeMonths(allClients);
+  const annualRate = annualizedChurnRate(allClients, today);
+  const renewal    = renewalRate(allClients, today, 12);
+  const monthly    = monthlyChurnSeries(allClients, today, 12);
+  const upcoming   = upcomingRenewalsBuckets(allClients, termToDays, bonusToDays, today);
+  const recent     = t90.churned.slice().sort((a, b) =>
+    (b.archive?.archived_at || '').localeCompare(a.archive?.archived_at || '')
+  );
+  const active     = allClients.filter(c => c.status === 'active').length;
+
+  // Backfill banner — archived rows missing date or reason
+  const archivedNoData = allClients.filter(c =>
+    c.status === 'archived' && (!c.archive?.archived_at || !c.archive?.reason)
+  );
+  const banner = archivedNoData.length > 0 ? `
+    <div class="mb-5 px-5 py-3.5 rounded-xl border border-amber-500/20 bg-amber-500/5 flex items-center justify-between gap-4">
+      <div class="text-[13px] text-amber-200/90">
+        <strong class="text-amber-200">${archivedNoData.length}</strong> archived ${archivedNoData.length === 1 ? 'client has' : 'clients have'} no archive reason — backfill them so churn metrics are accurate.
+      </div>
+      <button onclick="showBackfillForm()" class="px-3.5 py-1.5 text-[12px] font-medium text-amber-200 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 rounded-lg transition-colors whitespace-nowrap">Backfill now</button>
+    </div>` : '';
+
+  // KPIs
+  const fmtPct = (v) => v == null ? '—' : v.toFixed(1) + '%';
+  const t90Label = t90.count > 0 ? `${t90.count} · ${t90.rate.toFixed(1)}%` : '0';
+  const kpis = `
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+      ${kpiCard(active, 'Active Clients', '#34d399', 'rgba(52,211,153,0.15)')}
+      ${kpiCard(avgLife != null ? avgLife.toFixed(1) + 'mo' : '—', 'Avg Lifetime', '#818cf8', 'rgba(129,140,248,0.15)')}
+      ${kpiCard(t90Label, 'Churn (90d)', t90.count > 0 ? '#f87171' : '#64748b', t90.count > 0 ? 'rgba(248,113,113,0.15)' : 'rgba(100,116,139,0.1)')}
+      ${kpiCard(fmtPct(annualRate), 'Annual Churn', '#f87171', 'rgba(248,113,113,0.10)')}
+      ${kpiCard(renewal.decided > 0 ? Math.round(renewal.rate) + '%' : '—', 'Renewal Rate (12mo)', '#34d399', 'rgba(52,211,153,0.15)')}
+      ${kpiCard(upcoming.next60, 'Renewals (next 60d)', upcoming.next60 > 0 ? '#fbbf24' : '#64748b', upcoming.next60 > 0 ? 'rgba(251,191,36,0.15)' : 'rgba(100,116,139,0.1)')}
+    </div>
+  `;
+
+  // Monthly bar chart — vanilla flexbox bars
+  const totalChurn12mo = monthly.reduce((s, m) => s + m.count, 0);
+  const maxCount = Math.max(1, ...monthly.map(m => m.count));
+  const chart = `
+    <div class="rounded-2xl glass depth-2 p-5 mb-6">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h3 class="text-[13px] font-semibold text-white">Monthly Churn</h3>
+          <p class="text-[11px] text-[#4a5568] mt-0.5">last 12 months · only "churn" reason counts</p>
+        </div>
+        <div class="text-[11px] text-[#4a5568] font-mono">total: ${totalChurn12mo}</div>
+      </div>
+      <div class="flex items-end gap-2 px-1" style="height: 128px;">
+        ${monthly.map(m => {
+          const isEmpty = m.count === 0;
+          const barPx = isEmpty ? 4 : Math.max(8, (m.count / maxCount) * 100);
+          const color = isEmpty ? 'rgba(255,255,255,0.06)' : '#f87171';
+          const glow  = isEmpty ? 'none' : '0 0 12px rgba(248,113,113,0.25)';
+          const rateLabel = m.activeAtStart > 0 ? ` · ${m.rate.toFixed(1)}%` : '';
+          return `
+            <div class="flex-1 flex flex-col items-center gap-1 group">
+              <div class="text-[10px] text-[#8892a8] font-mono opacity-0 group-hover:opacity-100 transition-opacity h-3">${m.count}</div>
+              <div class="w-full rounded-t-sm" style="height: ${barPx}px; background: ${color}; box-shadow: ${glow};"
+                   title="${m.label}: ${m.count} churned · ${m.activeAtStart} active at month start${rateLabel}"></div>
+              <div class="text-[10px] text-[#4a5568] font-mono">${m.shortLabel}</div>
+            </div>`;
+        }).join('')}
+      </div>
+    </div>
+  `;
+
+  // Recent churn list
+  const recentList = recent.length > 0
+    ? recent.map(c => {
+        const idx = allClients.indexOf(c);
+        const months = lifetimeMonths(c, parseDate(c.archive?.archived_at));
+        const archDate = c.archive?.archived_at
+          ? new Date(c.archive.archived_at).toLocaleDateString('en-AU', {day:'numeric',month:'short',year:'2-digit'})
+          : '—';
+        return `
+          <li class="cursor-pointer hover:bg-white/[0.03] -mx-3 px-3 py-2 rounded-md transition-colors border-b border-white/[0.04] last:border-0" onclick="openEditModal(${idx})">
+            <div class="flex items-center justify-between">
+              <div class="text-[13px] text-[#e2e8f0] font-medium">${c.name}</div>
+              <div class="text-[11px] text-[#4a5568] font-mono">${months != null ? months.toFixed(1) + 'mo' : '—'}</div>
+            </div>
+            <div class="text-[11px] text-[#64748b] mt-0.5 flex items-center gap-2">
+              <span>archived ${archDate}</span>
+              <span class="text-rose-400/70">·</span>
+              <span class="text-rose-400/80">${c.archive?.reason || '—'}</span>
+            </div>
+          </li>`;
+      }).join('')
+    : `<li class="text-[#4a5568] text-[12px] font-mono py-3">No churn in the last 90 days. 🎉</li>`;
+
+  // Upcoming renewals by bucket
+  const renderBucket = (bucketKey, label) => {
+    const items = upcoming.detail.filter(d => d.bucket === bucketKey);
+    const itemsHtml = items.length === 0
+      ? `<li class="text-[#4a5568] text-[12px] font-mono py-1">None.</li>`
+      : items.map(d => {
+          const idx = allClients.indexOf(d.client);
+          return `
+            <li class="cursor-pointer hover:bg-white/[0.03] -mx-3 px-3 py-1.5 rounded-md transition-colors flex items-center justify-between" onclick="openEditModal(${idx})">
+              <span class="text-[12px] text-[#e2e8f0]">${d.client.name}</span>
+              <span class="text-[11px] text-[#64748b] font-mono">${fmt(d.endDate)} · ${d.daysAway}d</span>
+            </li>`;
+        }).join('');
+    return `
+      <div>
+        <div class="text-[10px] text-[#4a5568] uppercase tracking-widest font-mono mb-1.5">${label} · ${items.length}</div>
+        <ul>${itemsHtml}</ul>
+      </div>`;
+  };
+
+  const tables = `
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div class="rounded-2xl glass depth-2 p-5">
+        <h3 class="text-[13px] font-semibold text-white mb-3">Recent churn (90d)</h3>
+        <ul class="space-y-0">${recentList}</ul>
+      </div>
+      <div class="rounded-2xl glass depth-2 p-5">
+        <h3 class="text-[13px] font-semibold text-white mb-3">Upcoming renewals</h3>
+        <div class="space-y-3">
+          ${renderBucket('0-30',  'Next 30 days')}
+          ${renderBucket('31-60', '31–60 days')}
+          ${renderBucket('61-90', '61–90 days')}
+        </div>
+      </div>
+    </div>
+  `;
+
+  wrap.innerHTML = banner + kpis + chart + tables;
+}
+
+// ── Backfill archive reasons for legacy archived clients ─────────────────────
+
+function showBackfillForm() {
+  const archived = allClients
+    .map((c, idx) => ({ c, idx }))
+    .filter(({ c }) => c.status === 'archived' && (!c.archive?.archived_at || !c.archive?.reason));
+  if (archived.length === 0) { showToast('Nothing to backfill', 'info'); return; }
+
+  const modal = document.getElementById('add-client-modal');
+  if (!modal) return;
+  const inputCls = 'input-dark bg-[#0a0d13] border border-white/[0.08] rounded-md px-2 py-1.5 text-[12px] text-[#e2e8f0] focus:outline-none transition-all';
+  modal.classList.remove('hidden');
+  modal.innerHTML = `
+    <div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" onclick="closeModal()"></div>
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div class="modal-panel rounded-2xl w-full max-w-3xl border border-white/[0.06] max-h-[90vh] flex flex-col">
+        <div class="px-6 pt-6 pb-3 flex items-center justify-between">
+          <div>
+            <h2 class="text-base font-semibold text-white">Backfill Archive Reasons</h2>
+            <p class="text-[12px] text-[#64748b] mt-0.5">${archived.length} archived ${archived.length === 1 ? 'client' : 'clients'} need reason + date. Leave blank to skip.</p>
+          </div>
+          <button type="button" onclick="closeModal()" class="text-[#4a5568] hover:text-[#8892a8] text-lg leading-none transition-colors">&times;</button>
+        </div>
+        <div class="px-6 pt-2 pb-4 overflow-y-auto">
+          <div class="grid grid-cols-12 gap-2 text-[10px] uppercase tracking-widest text-[#4a5568] font-mono pb-2 border-b border-white/[0.06]">
+            <div class="col-span-4">Client</div>
+            <div class="col-span-3">Reason</div>
+            <div class="col-span-3">Archived on</div>
+            <div class="col-span-2">Started</div>
+          </div>
+          <div class="space-y-1.5 pt-2">
+            ${archived.map(({ c, idx }) => `
+              <div class="grid grid-cols-12 gap-2 items-center">
+                <div class="col-span-4 text-[13px] text-[#e2e8f0] truncate">${c.name}</div>
+                <div class="col-span-3">
+                  <select id="bf-reason-${idx}" class="${inputCls} w-full">
+                    <option value="">—</option>
+                    <option value="churn" ${c.archive?.reason === 'churn' ? 'selected' : ''}>Churn</option>
+                    <option value="deferred" ${c.archive?.reason === 'deferred' ? 'selected' : ''}>Deferred</option>
+                  </select>
+                </div>
+                <div class="col-span-3">
+                  <input type="date" id="bf-date-${idx}" class="${inputCls} w-full" value="${c.archive?.archived_at || ''}" />
+                </div>
+                <div class="col-span-2 text-[10px] text-[#4a5568] font-mono truncate">${c.dates?.client_start || '—'}</div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+        <div class="px-6 py-4 border-t border-white/[0.06] flex justify-end gap-2">
+          <button type="button" onclick="closeModal()" class="px-3.5 py-2 text-[13px] font-medium text-[#64748b] hover:text-[#e2e8f0] transition-colors">Cancel</button>
+          <button type="button" onclick="submitBackfill()" class="px-5 py-2 btn-primary text-[13px] font-semibold text-white rounded-lg">Save All</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function submitBackfill() {
+  let saved = 0;
+  allClients.forEach((c, idx) => {
+    if (c.status !== 'archived') return;
+    const reasonEl = document.getElementById(`bf-reason-${idx}`);
+    const dateEl   = document.getElementById(`bf-date-${idx}`);
+    if (!reasonEl || !dateEl) return;
+    const reason = reasonEl.value;
+    const date   = dateEl.value;
+    if (!reason || !date) return;
+    c.archive = { ...(c.archive || {}), reason, archived_at: date };
+    saveClients(idx);
+    saved++;
+  });
+  closeModal();
+  render();
+  renderStats();
+  showToast(`${saved} archive ${saved === 1 ? 'record' : 'records'} backfilled`);
 }
 
 // ── Toast notifications ────────────────────────────────────────────────────────

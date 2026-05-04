@@ -586,9 +586,10 @@
 
       <!-- View toggle -->
       <div class="flex items-center gap-0.5 bg-white/[0.02] rounded-lg p-0.5 border border-white/[0.04] depth-1">
-        <button id="view-table"   class="filter-pill px-3.5 py-1.5 rounded-md text-[13px] font-medium text-[#64748b] cursor-pointer"><span class="hotkey-u">T</span>able</button>
-        <button id="view-gantt"   class="filter-pill px-3.5 py-1.5 rounded-md text-[13px] font-medium text-[#64748b] cursor-pointer"><span class="hotkey-u">G</span>antt</button>
-        <button id="view-actions" class="filter-pill px-3.5 py-1.5 rounded-md text-[13px] font-medium text-[#64748b] cursor-pointer"><span class="hotkey-u">A</span>ctions</button>
+        <button id="view-table"     class="filter-pill px-3.5 py-1.5 rounded-md text-[13px] font-medium text-[#64748b] cursor-pointer"><span class="hotkey-u">T</span>able</button>
+        <button id="view-gantt"     class="filter-pill px-3.5 py-1.5 rounded-md text-[13px] font-medium text-[#64748b] cursor-pointer"><span class="hotkey-u">G</span>antt</button>
+        <button id="view-actions"   class="filter-pill px-3.5 py-1.5 rounded-md text-[13px] font-medium text-[#64748b] cursor-pointer"><span class="hotkey-u">A</span>ctions</button>
+        <button id="view-analytics" class="filter-pill px-3.5 py-1.5 rounded-md text-[13px] font-medium text-[#64748b] cursor-pointer">A<span class="hotkey-u">n</span>alytics</button>
       </div>
       <!-- Bulk Notes button (shown in all views) -->
       <button id="btn-bulk-notes" class="btn-secondary px-3.5 py-1.5 text-[13px] font-medium text-[#8892a8] rounded-lg cursor-pointer">Command Center (<span class="hotkey-u">B</span>)</button>
@@ -615,6 +616,11 @@
     <!-- ── Action Items view ───────────────────────────────────────── -->
     <div id="actions-wrap" class="hidden px-8 py-6">
       <div id="actions-inner"></div>
+    </div>
+
+    <!-- ── Analytics view ──────────────────────────────────────────── -->
+    <div id="analytics-wrap" class="hidden px-8 py-6">
+      <div id="analytics-inner"></div>
     </div>
 
     <!-- ── Command Center side pane ──────────────────────────────────── -->
@@ -680,10 +686,11 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase.js?v=3"></script>
+  <script src="supabase.js?v=4"></script>
   <script src="dateEngine.js?v=4"></script>
   <script src="addClient.js?v=6"></script>
   <script src="gantt.js?v=5"></script>
-  <script src="app.js?v=8"></script>
+  <script src="analytics.js?v=1"></script>
+  <script src="app.js?v=9"></script>
 </body>
 </html>

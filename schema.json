@@ -173,6 +173,22 @@
         "notes": { "type": "string" }
       }
     },
+    "archive": {
+      "type": "object",
+      "label": "Archive Details",
+      "note": "Set when client is archived. reason='churn' counts toward churn metrics; 'deferred' does not.",
+      "fields": {
+        "reason": {
+          "type": "enum",
+          "options": ["churn", "deferred"],
+          "labels": { "churn": "Churn", "deferred": "Deferred" },
+          "label": "Archive Reason"
+        },
+        "archived_at": { "type": "date", "label": "Archived On" },
+        "notes": { "type": "string", "label": "Archive Notes" }
+      },
+      "counts_as_churn": ["churn"]
+    },
     "pause_history": {
       "type": "array",
       "label": "Pause History",
