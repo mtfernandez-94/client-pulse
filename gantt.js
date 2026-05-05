@@ -185,7 +185,8 @@ function buildClientRow(c, i, rangeStart, rangeDays, pxPerDay) {
 
   // Bar with 3D depth
   let html = `
-    <div class="absolute flex items-center cursor-pointer group" style="left:${barLeft}px;top:${y + (GANTT_ROW_H - GANTT_BAR_H) / 2}px;width:${barWidth}px;height:${GANTT_BAR_H}px;" onclick="openEditModal(${c._idx})">
+    <div class="gantt-bar absolute flex items-center cursor-pointer group" style="left:${barLeft}px;top:${y + (GANTT_ROW_H - GANTT_BAR_H) / 2}px;width:${barWidth}px;height:${GANTT_BAR_H}px;" onclick="openEditModal(${c._idx})">
+      <div class="gantt-tooltip">Ends: ${fmt(eoc)}</div>
       <div class="w-full h-full rounded-full relative overflow-visible" style="background:linear-gradient(180deg, ${colors.bg}, ${colors.bg}dd);border:1.5px solid ${colors.border};box-shadow:0 0 8px ${colors.border}33, 0 2px 4px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.05);">
         <span class="absolute inset-0 flex items-center px-3 text-[11px] font-semibold truncate font-mono" style="color:${colors.text};">${barWidth > 60 ? c.name : ''}</span>
       </div>

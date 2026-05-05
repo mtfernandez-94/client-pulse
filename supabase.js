@@ -28,6 +28,11 @@ async function sbSignOut() {
   if (error) throw error;
 }
 
+async function sbUpdatePassword(newPassword) {
+  const { error } = await sb.auth.updateUser({ password: newPassword });
+  if (error) throw error;
+}
+
 async function sbGetSession() {
   const { data: { session }, error } = await sb.auth.getSession();
   if (error) throw error;

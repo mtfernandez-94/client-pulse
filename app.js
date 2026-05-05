@@ -657,6 +657,7 @@ function setupEvents() {
   document.getElementById('view-analytics')?.addEventListener('click', () => { viewMode = 'analytics'; render(); });
   document.getElementById('btn-export-csv')?.addEventListener('click', () => { exportCSV(); closeHamburger(); });
   document.getElementById('btn-import-json')?.addEventListener('click', () => { importBackupJSON(); closeHamburger(); });
+  document.getElementById('btn-change-password')?.addEventListener('click', () => { closeHamburger(); showChangePasswordModal(); });
   document.getElementById('btn-bulk-notes')?.addEventListener('click', toggleCmdPane);
   // Groq key and sound toggle in hamburger menu
   renderGroqKeySection();
@@ -1049,6 +1050,16 @@ function openEditModal(idx) {
               <div>
                 <label class="block text-[12px] font-medium text-[#64748b] mb-1">Program Start</label>
                 <input type="date" id="edit-program-start" class="${inputCls}" value="${client.dates?.program_start || ''}">
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3 mt-3">
+              <div>
+                <label class="block text-[12px] font-medium text-[#64748b] mb-1">Renewal Contact</label>
+                <div class="w-full bg-[#0a0d13] border border-white/[0.05] rounded-lg px-3 py-2.5 text-[13px] text-[#4a5568] cursor-default font-mono">${fmt(renewContact(client, termToDays, bonusToDays)) || '—'}</div>
+              </div>
+              <div>
+                <label class="block text-[12px] font-medium text-[#64748b] mb-1">Program End</label>
+                <div class="w-full bg-[#0a0d13] border border-white/[0.05] rounded-lg px-3 py-2.5 text-[13px] text-[#4a5568] cursor-default font-mono">${fmt(endOfCommitment(client, termToDays, bonusToDays)) || '—'}</div>
               </div>
             </div>
           </div>
@@ -1857,6 +1868,62 @@ function submitBackfill() {
 }
 
 // ── Toast notifications ────────────────────────────────────────────────────────
+
+function showChangePasswordModal() {
+  const inputCls = 'input-dark w-full bg-[#0a0d13] border border-white/[0.08] rounded-lg px-3 py-2.5 text-[13px] text-[#e2e8f0] focus:outline-none transition-all placeholder-[#4a5568]';
+  const modal = document.getElementById('add-client-modal');
+  modal.classList.remove('hidden');
+  modal.innerHTML = `
+    <div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" onclick="closeModal()"></div>
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div class="modal-panel rounded-2xl w-full max-w-sm border border-white/[0.06]">
+        <div class="px-6 pt-6 pb-4 flex items-center justify-between">
+          <h2 class="text-base font-semibold text-white">Change Password</h2>
+          <button onclick="closeModal()" class="text-[#4a5568] hover:text-[#8892a8] transition-colors text-lg leading-none">&times;</button>
+        </div>
+        <div class="px-6 pb-6 space-y-4">
+          <div>
+            <label class="block text-[12px] font-medium text-[#64748b] mb-1">New Password</label>
+            <input type="password" id="cp-new-password" class="${inputCls}" placeholder="Min. 6 characters" autocomplete="new-password">
+          </div>
+          <div>
+            <label class="block text-[12px] font-medium text-[#64748b] mb-1">Confirm Password</label>
+            <input type="password" id="cp-confirm-password" class="${inputCls}" placeholder="Repeat new password" autocomplete="new-password">
+          </div>
+          <p id="cp-error" class="text-[12px] text-rose-400 hidden"></p>
+          <button onclick="submitChangePassword()" class="btn-primary w-full px-4 py-2.5 text-[13px] font-semibold text-white rounded-lg">Update Password</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('cp-confirm-password')?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') submitChangePassword();
+  });
+}
+
+async function submitChangePassword() {
+  const newPw  = document.getElementById('cp-new-password')?.value || '';
+  const confPw = document.getElementById('cp-confirm-password')?.value || '';
+  const errorEl = document.getElementById('cp-error');
+  errorEl.classList.add('hidden');
+  if (newPw.length < 6) {
+    errorEl.textContent = 'Password must be at least 6 characters.';
+    errorEl.classList.remove('hidden');
+    return;
+  }
+  if (newPw !== confPw) {
+    errorEl.textContent = 'Passwords do not match.';
+    errorEl.classList.remove('hidden');
+    return;
+  }
+  try {
+    await sbUpdatePassword(newPw);
+    closeModal();
+    showToast('Password updated');
+  } catch (err) {
+    errorEl.textContent = err.message || 'Failed to update password.';
+    errorEl.classList.remove('hidden');
+  }
+}
 
 function showToast(msg, type = 'success', duration = 2800) {
   const container = document.getElementById('toast-container');
