@@ -10,7 +10,9 @@ let schemaCache  = null; // full schema object, used by addClient modal
 let filterStatus = 'active';
 let filterHealth = '';
 let filterTerm   = '';
-let sortCol = 'renewalUrgency';
+let filterRenewalsOnly = false;
+let filterReviewsOnly  = false;
+let sortCol = 'name';
 let sortDir = 'asc';
 let viewMode = 'table'; // 'table' | 'gantt' | 'actions' | 'analytics'
 let _lastAutoBackup = 0; // timestamp of last auto-backup
@@ -57,6 +59,8 @@ function getVisible() {
   if (filterStatus !== 'all') list = list.filter(c => c.status === filterStatus);
   if (filterHealth)            list = list.filter(c => c._health === filterHealth);
   if (filterTerm)              list = list.filter(c => c.contract?.term === filterTerm);
+  if (filterRenewalsOnly)      list = list.filter(c => renewalFlag(c, termToDays, bonusToDays));
+  if (filterReviewsOnly)       list = list.filter(c => reviewFlag(c, termToDays, bonusToDays));
   if (searchQuery) {
     const q = searchQuery.toLowerCase();
     list = list.filter(c => c.name.toLowerCase().includes(q));
@@ -158,21 +162,27 @@ function renderCell(client, col) {
   switch (col.cell_type) {
     case 'name':
       return `<td class="${TD} font-medium text-white">
-        <span class="cursor-pointer hover:text-indigo-400 transition-colors" onclick="openEditModal(${idx})">${client.name}</span>
+        <span class="cursor-pointer hover:text-indigo-400 transition-colors" onclick="event.stopPropagation(); openEditModal(${idx})">${client.name}</span>
       </td>`;
 
     case 'health_badge': {
       const options = schemaCache?.fields?.health?.options || [];
+      const badgeCls = HEALTH_STYLE[client._health] || 'bg-white/[0.05] text-[#64748b] ring-1 ring-white/[0.08]';
       const opts = options.map(o => `<option value="${o}" ${o === client._health ? 'selected' : ''}>${o}</option>`).join('');
       return `<td class="${TD}">
-        <select onchange="updateHealth(${idx}, this.value)" class="appearance-none bg-transparent border-0 cursor-pointer text-[11px] font-medium focus:ring-0 p-0 text-[#e2e8f0]">
+        <select onchange="updateHealth(${idx}, this.value)"
+          class="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium cursor-pointer border-0 focus:ring-0 focus:outline-none transition-opacity hover:opacity-80 ${badgeCls}"
+          style="background-clip:padding-box;">
           ${opts}
         </select>
       </td>`;
     }
 
     case 'status_badge':
-      return `<td class="${TD}">${statusBadge(client.status)}</td>`;
+      return `<td class="${TD}">
+        <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium capitalize cursor-pointer hover:opacity-80 transition-opacity ${STATUS_STYLE[client.status] || 'bg-white/[0.05] text-[#64748b]'}"
+          onclick="event.stopPropagation(); openEditModal(${idx})">${client.status}</span>
+      </td>`;
 
     case 'text': {
       const val = getPath(client, col.key);
@@ -436,7 +446,8 @@ function render() {
 
   tbody.innerHTML = clients.map(c => {
     const hColors = GANTT_BAR_COLOR[c._health] || GANTT_DEFAULT_COLOR;
-    return `<tr class="border-b border-white/[0.04] transition-all" style="box-shadow:inset 3px 0 0 ${hColors.border};">
+    return `<tr class="border-b border-white/[0.04] transition-all cursor-pointer" style="box-shadow:inset 3px 0 0 ${hColors.border};"
+      onclick="handleRowClick(event,${c._idx})">
       ${tableColumns.map(col => renderCell(c, col)).join('')}
     </tr>`;
   }).join('');
@@ -447,11 +458,30 @@ function render() {
 
 // ── Stats bar — 3D KPI cards + health distribution bar ────────────────────────
 
-function kpiCard(value, label, color, bgColor) {
-  return `<div class="kpi-card" style="--kpi-color:${color};--kpi-bg:${bgColor};">
+function kpiCard(value, label, color, bgColor, filterKey = null, isActive = false) {
+  const clickable = filterKey ? 'cursor-pointer' : '';
+  const activeRing = isActive ? `box-shadow:0 0 0 2px ${color},0 2px 4px rgba(0,0,0,0.25),0 8px 16px rgba(0,0,0,0.2),0 16px 32px rgba(0,0,0,0.1),inset 0 1px 0 rgba(255,255,255,0.05);` : '';
+  const onclick = filterKey ? `onclick="setKpiFilter('${filterKey}')"` : '';
+  return `<div class="kpi-card ${clickable}" style="--kpi-color:${color};--kpi-bg:${bgColor};${activeRing}" ${onclick}>
     <div class="kpi-value font-mono">${value}</div>
     <div class="kpi-label">${label}</div>
   </div>`;
+}
+
+function setKpiFilter(key) {
+  filterRenewalsOnly = false;
+  filterReviewsOnly  = false;
+  switch (key) {
+    case 'all':      filterStatus = 'all';      break;
+    case 'active':   filterStatus = 'active';   break;
+    case 'paused':   filterStatus = 'paused';   break;
+    case 'archived': filterStatus = 'archived'; break;
+    case 'renewals': filterStatus = 'active'; filterRenewalsOnly = true; break;
+    case 'reviews':  filterStatus = 'active'; filterReviewsOnly  = true; break;
+  }
+  viewMode = 'table';
+  render();
+  renderStats();
 }
 
 function renderStats() {
@@ -480,14 +510,15 @@ function renderStats() {
     return `<div class="health-bar-segment rounded-sm" style="width:${pct}%;background:${colors.border};box-shadow:0 0 8px ${colors.border}40;" title="${h}: ${count}"></div>`;
   }).join('');
 
+  const noSpecial  = !filterRenewalsOnly && !filterReviewsOnly;
   document.getElementById('stats').innerHTML = `
     <div class="grid grid-cols-3 sm:grid-cols-6 gap-3 mb-4">
-      ${kpiCard(total, 'Total Clients', '#818cf8', 'rgba(129,140,248,0.15)')}
-      ${kpiCard(active, 'Active', '#34d399', 'rgba(52,211,153,0.15)')}
-      ${kpiCard(paused, 'Paused', '#fbbf24', 'rgba(251,191,36,0.15)')}
-      ${kpiCard(archived, 'Archived', '#64748b', 'rgba(100,116,139,0.1)')}
-      ${kpiCard(renewalsDue, 'Renewals Due', renewalsDue > 0 ? '#f87171' : '#64748b', renewalsDue > 0 ? 'rgba(248,113,113,0.15)' : 'rgba(100,116,139,0.1)')}
-      ${kpiCard(reviewsDue, 'Reviews Due', reviewsDue > 0 ? '#fbbf24' : '#64748b', reviewsDue > 0 ? 'rgba(251,191,36,0.15)' : 'rgba(100,116,139,0.1)')}
+      ${kpiCard(total,       'Total Clients',  '#818cf8', 'rgba(129,140,248,0.15)',  'all',      filterStatus==='all'      && noSpecial)}
+      ${kpiCard(active,      'Active',          '#34d399', 'rgba(52,211,153,0.15)',   'active',   filterStatus==='active'   && noSpecial)}
+      ${kpiCard(paused,      'Paused',          '#fbbf24', 'rgba(251,191,36,0.15)',   'paused',   filterStatus==='paused'   && noSpecial)}
+      ${kpiCard(archived,    'Archived',        '#64748b', 'rgba(100,116,139,0.1)',   'archived', filterStatus==='archived' && noSpecial)}
+      ${kpiCard(renewalsDue, 'Renewals Due',    renewalsDue > 0 ? '#f87171' : '#64748b', renewalsDue > 0 ? 'rgba(248,113,113,0.15)' : 'rgba(100,116,139,0.1)', 'renewals', filterRenewalsOnly)}
+      ${kpiCard(reviewsDue,  'Reviews Due',     reviewsDue > 0  ? '#fbbf24' : '#64748b', reviewsDue  > 0 ? 'rgba(251,191,36,0.15)'  : 'rgba(100,116,139,0.1)', 'reviews',  filterReviewsOnly)}
     </div>
     ${active > 0 ? `<div class="flex h-1.5 rounded-full overflow-hidden gap-0.5">${barSegments}</div>` : ''}
   `;
@@ -633,13 +664,25 @@ function importBackupJSON() {
   input.click();
 }
 
+// ── Row click — open edit modal unless user clicked an interactive element ────
+
+function handleRowClick(e, idx) {
+  const tag = (e.target.tagName || '').toLowerCase();
+  if (['select', 'button', 'a', 'input', 'textarea'].includes(tag)) return;
+  if (e.target.closest('[data-inline-date]')) return;
+  openEditModal(idx);
+}
+
 // ── Events ────────────────────────────────────────────────────────────────────
 
 function setupEvents() {
   ['active', 'paused', 'archived', 'all'].forEach(s => {
     document.getElementById(`filter-${s}`)?.addEventListener('click', () => {
       filterStatus = s;
+      filterRenewalsOnly = false;
+      filterReviewsOnly  = false;
       render();
+      renderStats();
     });
   });
 
@@ -718,6 +761,14 @@ function closeHamburger() {
 // ── Global hotkeys ─────────────────────────────────────────────────────────────
 
 function handleGlobalHotkey(e) {
+  // Esc always closes search / hamburger regardless of focus
+  if (e.key === 'Escape') {
+    const searchIsOpen = !document.getElementById('search-expand')?.classList.contains('hidden');
+    if (searchIsOpen) { e.preventDefault(); closeSearch(); return; }
+    closeHamburger();
+    return;
+  }
+
   // Skip if typing in any interactive element
   const tag = (e.target.tagName || '').toLowerCase();
   if (['input', 'textarea', 'select'].includes(tag) || e.target.isContentEditable) return;
@@ -731,6 +782,7 @@ function handleGlobalHotkey(e) {
 
   switch (e.key.toLowerCase()) {
     case 'j':
+    case '/':
       e.preventDefault();
       toggleSearch();
       break;
@@ -1428,20 +1480,35 @@ function confirmResume(idx) {
 
 function openRenewalModal(idx) {
   const client = allClients[idx];
-  if (!client || client.renewal?.status !== 'pending') return;
+  if (!client) return;
+  // Allow pending or unset renewal (unset = never actioned = treat as pending)
+  if (client.renewal?.status && client.renewal.status !== 'pending') return;
   const modal = document.getElementById('add-client-modal');
   if (!modal) return;
+
   const inputCls = 'input-dark w-full bg-[#0a0d13] border border-white/[0.08] rounded-lg px-3 py-2.5 text-[13px] text-[#e2e8f0] focus:outline-none transition-all placeholder-[#4a5568]';
+  const eoc      = endOfCommitment(client, termToDays, bonusToDays);
+  const eocLabel = eoc ? fmt(eoc) : '—';
+
   modal.classList.remove('hidden');
   modal.innerHTML = `
     <div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" onclick="closeModal()"></div>
     <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div class="modal-panel rounded-2xl w-full max-w-lg border border-white/[0.06]">
         <div class="px-6 pt-6 pb-4 flex items-center justify-between">
-          <h2 class="text-base font-semibold text-white">Renewal: ${client.name}</h2>
+          <h2 class="text-base font-semibold text-white">Renewal — ${client.name}</h2>
           <button type="button" onclick="closeModal()" class="text-[#4a5568] hover:text-[#8892a8] text-lg leading-none transition-colors">&times;</button>
         </div>
-        <div class="px-6 py-5 space-y-4">
+
+        <div class="px-6 py-5 space-y-5">
+
+          <!-- Current end of commitment (info) -->
+          <div class="flex items-center justify-between rounded-lg bg-white/[0.03] border border-white/[0.05] px-3.5 py-2.5">
+            <span class="text-[12px] text-[#64748b]">Current end of commitment</span>
+            <span class="text-[13px] font-mono text-[#e2e8f0]">${eocLabel}</span>
+          </div>
+
+          <!-- Outcome -->
           <div>
             <label class="block text-[12px] font-medium text-[#64748b] mb-1">Outcome</label>
             <select id="renewal-outcome" class="${inputCls}" onchange="toggleRenewalFields()">
@@ -1450,38 +1517,61 @@ function openRenewalModal(idx) {
               <option value="paused">Paused</option>
             </select>
           </div>
+
+          <!-- Renewed-only fields -->
           <div id="renewal-renewed-fields" class="space-y-4">
-            <div class="grid grid-cols-2 gap-3">
-              <div>
-                <label class="block text-[12px] font-medium text-[#64748b] mb-1">New Term</label>
-                <select id="renewal-term" class="${inputCls}">
-                  ${(schemaCache?.fields?.contract?.fields?.term?.options || []).map(o =>
-                    `<option value="${o}" ${o === client.contract?.term ? 'selected' : ''}>${o}</option>`
-                  ).join('')}
-                </select>
+
+            <!-- New term -->
+            <div>
+              <label class="block text-[12px] font-medium text-[#64748b] mb-1">New term</label>
+              <select id="renewal-term" class="${inputCls}">
+                ${(schemaCache?.fields?.contract?.fields?.term?.options || []).map(o =>
+                  `<option value="${o}" ${o === client.contract?.term ? 'selected' : ''}>${o}</option>`
+                ).join('')}
+              </select>
+            </div>
+
+            <!-- Start mode toggle -->
+            <div>
+              <label class="block text-[12px] font-medium text-[#64748b] mb-2">Start date</label>
+              <div class="grid grid-cols-2 gap-2">
+                <!-- Extend button — starts active (blue) -->
+                <button type="button" id="mode-btn-extend" onclick="selectRenewalMode('extend')"
+                  class="px-3 py-2.5 rounded-lg border text-[12px] font-medium text-left transition-all border-[#3b82f6]/40 bg-[#1e3a5f]/40 text-[#93c5fd]">
+                  <div class="font-semibold">Extend from current</div>
+                  <div class="font-mono text-[11px] mt-0.5 opacity-80">${eocLabel}</div>
+                </button>
+                <!-- Delayed button — starts inactive (gray) -->
+                <button type="button" id="mode-btn-delayed" onclick="selectRenewalMode('delayed')"
+                  class="px-3 py-2.5 rounded-lg border text-[12px] font-medium text-left transition-all border-white/[0.08] bg-transparent text-[#4a5568]">
+                  <div class="font-semibold">Delayed renewal</div>
+                  <div class="text-[11px] mt-0.5 opacity-60">Pick a new start date</div>
+                </button>
               </div>
-              <div>
-                <label class="block text-[12px] font-medium text-[#64748b] mb-1">New Program Start</label>
-                <input type="text" id="renewal-program-start" class="${inputCls}" placeholder="Select date…">
+              <!-- Hidden date picker; shown only in delayed mode -->
+              <div id="renewal-delayed-wrap" class="hidden mt-2">
+                <input type="text" id="renewal-delayed-start" class="${inputCls}" placeholder="Select new start date…">
               </div>
+              <!-- Hidden input tracks active mode for submitRenewal -->
+              <input type="hidden" id="renewal-start-mode" value="extend">
             </div>
           </div>
+
+          <!-- Notes -->
           <div>
             <label class="block text-[12px] font-medium text-[#64748b] mb-1">Notes → saved to Client Notes</label>
             <textarea id="renewal-notes" rows="3" class="${inputCls} resize-none" placeholder="e.g. upgraded to 12mth, keen to keep going…"></textarea>
           </div>
         </div>
+
         <div class="px-6 py-4 border-t border-white/[0.06] flex justify-end gap-2">
           <button type="button" onclick="closeModal()" class="px-3.5 py-2 text-[13px] font-medium text-[#64748b] hover:text-[#e2e8f0] transition-colors">Cancel</button>
-          <button type="button" onclick="submitRenewal(${idx})" class="px-5 py-2 btn-primary text-[13px] font-semibold text-white rounded-lg">Save outcome</button>
+          <button type="button" onclick="submitRenewal(${idx})" class="px-5 py-2 btn-primary text-[13px] font-semibold text-white rounded-lg">Save renewal</button>
         </div>
       </div>
     </div>`;
-  // Init Flatpickr on new program start field
-  if (window.flatpickr) {
-    flatpickr('#renewal-program-start', { ...FP_CFG, defaultDate: client.dates?.program_start || null });
-  }
-  // Wire outcome toggle
+
+  // Ensure mode starts at extend (no flatpickr init needed — delayed picker inits on first switch)
   toggleRenewalFields();
 }
 
@@ -1491,29 +1581,72 @@ function toggleRenewalFields() {
   if (wrap) wrap.classList.toggle('hidden', outcome !== 'renewed');
 }
 
+function selectRenewalMode(mode) {
+  const modeInput = document.getElementById('renewal-start-mode');
+  if (modeInput) modeInput.value = mode;
+
+  const extBtn  = document.getElementById('mode-btn-extend');
+  const delBtn  = document.getElementById('mode-btn-delayed');
+  const delWrap = document.getElementById('renewal-delayed-wrap');
+  if (!extBtn || !delBtn || !delWrap) return;
+
+  const ACTIVE   = 'px-3 py-2.5 rounded-lg border text-[12px] font-medium text-left transition-all border-[#3b82f6]/40 bg-[#1e3a5f]/40 text-[#93c5fd]';
+  const INACTIVE = 'px-3 py-2.5 rounded-lg border text-[12px] font-medium text-left transition-all border-white/[0.08] bg-transparent text-[#4a5568]';
+
+  if (mode === 'extend') {
+    extBtn.className = ACTIVE;
+    delBtn.className = INACTIVE;
+    delWrap.classList.add('hidden');
+  } else {
+    extBtn.className = INACTIVE;
+    delBtn.className = ACTIVE;
+    delWrap.classList.remove('hidden');
+    if (window.flatpickr && !delWrap._fpDone) {
+      flatpickr('#renewal-delayed-start', { ...FP_CFG });
+      delWrap._fpDone = true;
+    }
+  }
+}
+
 function submitRenewal(idx) {
-  const client       = allClients[idx];
+  const client    = allClients[idx];
   if (!client) return;
-  const outcome      = document.getElementById('renewal-outcome')?.value || 'renewed';
-  const notes        = document.getElementById('renewal-notes')?.value?.trim() || null;
-  const programStart = document.getElementById('renewal-program-start')?.value || null;
-  const term         = document.getElementById('renewal-term')?.value || null;
+  const outcome   = document.getElementById('renewal-outcome')?.value || 'renewed';
+  const notes     = document.getElementById('renewal-notes')?.value?.trim() || null;
+  const term      = document.getElementById('renewal-term')?.value || null;
+  const startMode = document.getElementById('renewal-start-mode')?.value || 'extend';
 
   client.renewal = { status: outcome, actioned_date: todayISO(), notes: null };
 
   if (outcome === 'renewed') {
-    if (programStart) { client.dates = client.dates || {}; client.dates.program_start = programStart; }
-    if (term)           client.contract = { ...client.contract, term };
+    let newStart = null;
+    if (startMode === 'delayed') {
+      newStart = document.getElementById('renewal-delayed-start')?.value || null;
+    } else {
+      const eoc = endOfCommitment(client, termToDays, bonusToDays);
+      if (eoc) {
+        const y = eoc.getFullYear();
+        const m = String(eoc.getMonth() + 1).padStart(2, '0');
+        const d = String(eoc.getDate()).padStart(2, '0');
+        newStart = `${y}-${m}-${d}`;
+      }
+    }
+    if (newStart) {
+      client.dates           = client.dates || {};
+      client.dates.program_start = newStart;
+      client.dates.weeks_paused  = 0; // fresh program
+    }
+    if (term) client.contract = { ...client.contract, term };
   }
 
-  // Save renewal notes to client_notes as a timestamped entry
   if (notes) {
     if (!client.client_notes) client.client_notes = [];
     const termLabel = outcome === 'renewed' && term ? ` · ${term}` : '';
+    const modeLabel = outcome === 'renewed' && startMode === 'delayed' ? ' · delayed start' : '';
     client.client_notes.push({
       id:   crypto.randomUUID(),
       date: new Date().toISOString(),
-      note: `**Renewal: ${outcome}${termLabel}**\n${notes}`,
+      note: `**Renewal: ${outcome}${termLabel}${modeLabel}**\n${notes}`,
     });
   }
 
@@ -2062,9 +2195,9 @@ function renderActionItems() {
     });
   });
 
-  function clientRow(c, sub, sub2) {
+  function clientRow(c, sub, sub2, clickFn) {
     const hc = GANTT_BAR_COLOR[c._health] || GANTT_DEFAULT_COLOR;
-    return `<div class="py-2.5 border-b border-white/[0.04] last:border-0 cursor-pointer hover:bg-white/[0.03] rounded-lg px-2 -mx-2 transition-colors" onclick="openEditModal(${c._idx})">
+    return `<div class="py-2.5 border-b border-white/[0.04] last:border-0 cursor-pointer hover:bg-white/[0.03] rounded-lg px-2 -mx-2 transition-colors" onclick="${clickFn || `openEditModal(${c._idx})`}">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-2.5 min-w-0">
           <div class="w-1.5 h-1.5 rounded-full flex-shrink-0" style="background:${hc.border};box-shadow:0 0 6px ${hc.border}80;"></div>
@@ -2092,9 +2225,9 @@ function renderActionItems() {
 
   // Merged: Flagged (top) + Cruising (below divider)
   const attentionRows = [
-    ...attention.map(c => clientRow(c, c.flag_reason || '', '')),
-    ...(attention.length > 0 && cruising.length > 0 ? [
-      `<div class="border-t border-white/[0.06] my-2 pt-1">
+    ...attention.map(c => clientRow(c, c.flag_reason || '')),
+    ...(cruising.length > 0 ? [
+      `<div class="${attention.length > 0 ? 'border-t border-white/[0.06] mt-2 ' : ''}pt-1 mb-1">
         <span class="text-[10px] font-semibold text-[#4a5568] uppercase tracking-widest font-mono">Cruising</span>
       </div>`
     ] : []),
@@ -2132,7 +2265,10 @@ function renderActionItems() {
       ${card('Renewals Due','🔄',renewalsDue.length, renewalsDue.map(c=>{
         const rc=renewContact(c,termToDays,bonusToDays);
         const d=rc?Math.round((rc-today)/86400000):null;
-        return clientRow(c, d!==null?(d<0?`${Math.abs(d)}d overdue`:`in ${d}d`):'');
+        const label = d!==null
+          ? (d<0 ? `<span class="text-rose-400">${Math.abs(d)}d overdue</span>` : `in ${d}d`)
+          : '';
+        return clientRow(c, label, null, `openRenewalModal(${c._idx})`);
       }).join(''), true)}
     </div>`;
 }
