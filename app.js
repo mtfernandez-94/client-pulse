@@ -2016,6 +2016,10 @@ function showChangePasswordModal() {
         </div>
         <div class="px-6 pb-6 space-y-4">
           <div>
+            <label class="block text-[12px] font-medium text-[#64748b] mb-1">Current Password</label>
+            <input type="password" id="cp-current-password" class="${inputCls}" placeholder="Your current password" autocomplete="current-password">
+          </div>
+          <div>
             <label class="block text-[12px] font-medium text-[#64748b] mb-1">New Password</label>
             <input type="password" id="cp-new-password" class="${inputCls}" placeholder="Min. 6 characters" autocomplete="new-password">
           </div>
@@ -2034,10 +2038,16 @@ function showChangePasswordModal() {
 }
 
 async function submitChangePassword() {
+  const currPw = document.getElementById('cp-current-password')?.value || '';
   const newPw  = document.getElementById('cp-new-password')?.value || '';
   const confPw = document.getElementById('cp-confirm-password')?.value || '';
   const errorEl = document.getElementById('cp-error');
   errorEl.classList.add('hidden');
+  if (!currPw) {
+    errorEl.textContent = 'Please enter your current password.';
+    errorEl.classList.remove('hidden');
+    return;
+  }
   if (newPw.length < 6) {
     errorEl.textContent = 'Password must be at least 6 characters.';
     errorEl.classList.remove('hidden');
@@ -2049,6 +2059,8 @@ async function submitChangePassword() {
     return;
   }
   try {
+    const session = await sbGetSession();
+    await sbSignIn(session.user.email, currPw);
     await sbUpdatePassword(newPw);
     closeModal();
     showToast('Password updated');
