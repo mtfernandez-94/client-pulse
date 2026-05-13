@@ -1152,6 +1152,22 @@ function openEditModal(idx) {
           </div>
           ` : ''}
 
+          ${client.status === 'archived' ? `
+          <div>
+            <h3 class="text-[11px] font-semibold text-[#4a5568] uppercase tracking-widest mb-3 font-mono">Archive</h3>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-[12px] font-medium text-[#64748b] mb-1">Archived on</label>
+                <input type="text" id="edit-archived-at" class="${inputCls}" placeholder="Select date…" value="${client.archive?.archived_at || ''}">
+              </div>
+              <div>
+                <label class="block text-[12px] font-medium text-[#64748b] mb-1">Program ended <span class="text-[#4a5568] normal-case font-normal">(override)</span></label>
+                <input type="text" id="edit-program-end-date" class="${inputCls}" placeholder="Select date…" value="${client.archive?.program_end_date || ''}">
+              </div>
+            </div>
+          </div>
+          ` : ''}
+
           <div>
             <h3 class="text-[11px] font-semibold text-[#4a5568] uppercase tracking-widest mb-3 font-mono">Client Notes</h3>
             <div class="flex gap-2 mb-3">
@@ -1191,7 +1207,7 @@ function openEditModal(idx) {
     </div>`;
   // Init Flatpickr on all date inputs in this modal
   if (window.flatpickr) {
-    ['edit-client-start','edit-program-start'].forEach(id => {
+    ['edit-client-start','edit-program-start','edit-archived-at','edit-program-end-date'].forEach(id => {
       const el = document.getElementById(id);
       if (el) flatpickr(el, FP_CFG);
     });
@@ -1244,6 +1260,17 @@ function saveEdit(idx) {
   const flagWrap = document.getElementById('edit-flag-reason-wrap');
   if (flagWrap && !flagWrap.classList.contains('hidden')) {
     c.flag_reason = val('edit-flag-reason');
+  }
+
+  // Update archive dates if editing an archived client
+  if (c.status === 'archived') {
+    const archivedAt    = val('edit-archived-at');
+    const programEndDate = val('edit-program-end-date');
+    c.archive = {
+      ...c.archive,
+      ...(archivedAt    ? { archived_at: archivedAt }       : {}),
+      ...(programEndDate ? { program_end_date: programEndDate } : { program_end_date: null }),
+    };
   }
 
   saveClients(idx);
@@ -1751,7 +1778,7 @@ function showReactivateForm(idx) {
           <p class="text-[13px] text-[#64748b]">Set the new program start date and optional contract term. Client will return as active with health "Onboarding".</p>
           <div>
             <label class="block text-[12px] font-medium text-[#64748b] mb-1">New program start</label>
-            <input type="date" id="reactivate-program-start" class="${inputCls}" value="${todayISO()}" required>
+            <input type="text" id="reactivate-program-start" class="${inputCls}" placeholder="Select date…" required>
           </div>
           <div>
             <label class="block text-[12px] font-medium text-[#64748b] mb-1">Contract term (optional)</label>
@@ -1764,6 +1791,9 @@ function showReactivateForm(idx) {
         </div>
       </div>
     </div>`;
+  if (window.flatpickr) {
+    flatpickr('#reactivate-program-start', { ...FP_CFG, defaultDate: todayISO() });
+  }
 }
 
 function submitReactivate(idx) {

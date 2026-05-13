@@ -5,12 +5,18 @@
 // All inputs are arrays of client objects + a `today` Date. No side effects.
 // All metrics filter on archive.reason — only "churn" counts; "deferred" does not.
 
-// Months a client lived: client_start → archived_at (or today if still active)
+// Resolve the effective end date for a client: program_end_date overrides archived_at when set
+function archiveEndDate(c) {
+  return c.archive?.program_end_date || c.archive?.archived_at || null;
+}
+
+// Months a client lived: client_start → program_end_date (or archived_at, or today if active)
 function lifetimeMonths(c, asOf) {
   const startStr = c.dates?.client_start || c.dates?.program_start;
   const start = parseDate(startStr);
   if (!start) return null;
-  const end = c.archive?.archived_at ? parseDate(c.archive.archived_at) : (asOf || getToday());
+  const endStr = archiveEndDate(c);
+  const end = endStr ? parseDate(endStr) : (asOf || getToday());
   if (!end) return null;
   return daysDiff(start, end) / 30.4375;
 }
@@ -20,13 +26,16 @@ function isChurnArchive(c) {
 }
 
 // Was this client active (or paused) on a given date?
-// Active if: client_start ≤ date AND (not archived OR archived after date)
+// Active if: client_start ≤ date AND (not archived OR program ended after date)
 function wasActiveOnDate(c, date) {
   const start = parseDate(c.dates?.client_start || c.dates?.program_start);
   if (!start || start > date) return false;
-  if (c.status === 'archived' && c.archive?.archived_at) {
-    const archived = parseDate(c.archive.archived_at);
-    if (archived && archived <= date) return false;
+  if (c.status === 'archived') {
+    const endStr = archiveEndDate(c);
+    if (endStr) {
+      const ended = parseDate(endStr);
+      if (ended && ended <= date) return false;
+    }
   }
   return true;
 }
@@ -36,10 +45,11 @@ function activeAtDate(clients, date) {
 }
 
 // Clients whose archive falls within [from, to], counted as churn only
+// Uses program_end_date for window attribution when set, otherwise archived_at
 function churnedInWindow(clients, from, to) {
   return clients.filter(c => {
     if (!isChurnArchive(c)) return false;
-    const d = parseDate(c.archive.archived_at);
+    const d = parseDate(archiveEndDate(c));
     return d && d >= from && d <= to;
   });
 }

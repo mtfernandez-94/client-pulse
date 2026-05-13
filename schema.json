@@ -185,6 +185,7 @@
           "label": "Archive Reason"
         },
         "archived_at": { "type": "date", "label": "Archived On" },
+        "program_end_date": { "type": "date", "label": "Program ended (override)" },
         "notes": { "type": "string", "label": "Archive Notes" }
       },
       "counts_as_churn": ["churn"]
