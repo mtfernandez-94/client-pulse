@@ -201,6 +201,31 @@
         "health_before_pause": "string or null"
       }
     },
+    "contract_history": {
+      "type": "array",
+      "label": "Contract & Payment Events",
+      "note": "Append-only log. Each event records what changed and when it took effect. Projection of newest non-null fields is the current state.",
+      "items": {
+        "id": "uuid",
+        "event_date": "ISO date — when this event takes effect",
+        "logged_at": "ISO timestamp — when recorded",
+        "event_type": "enum: sign | renew | rate_change | payment_change | term_extension",
+        "term": "12wks|16wks|6mth|12mth — omit if unchanged",
+        "bonus_term": "1mth|2mth|null — null explicitly clears bonus; omit if unchanged",
+        "program_start": "ISO date — omit if unchanged",
+        "payment": {
+          "period": "Weekly|Biweekly|Monthly|PIF|Split PIF (2) — omit if unchanged",
+          "amount": "number — omit if unchanged",
+          "currency": "AUD|USD|EUR|GBP|CAD — omit if unchanged",
+          "gst": "boolean — omit if unchanged",
+          "processor": "Stripe|Paypal|Bank Transfer|Wise — omit if unchanged"
+        },
+        "notes": "string or null",
+        "manual_override": "boolean — true if event_date was manually set",
+        "voided": "boolean — soft-delete flag; voided events are excluded from projection",
+        "corrects": "uuid or null — links to the event this one corrects"
+      }
+    },
     "notes": {
       "type": "string",
       "required": false,

@@ -159,6 +159,59 @@ function diagnoseMissingReviews(c, termToDays, bonusToDays) {
   return null;
 }
 
+// ── Contract history projection ───────────────────────────────────────────────
+// Walks contract_history sorted by event_date (then logged_at for ties),
+// forward-applies each event's non-undefined fields, and writes the projected
+// state back onto client.contract / client.payment / client.dates.program_start.
+// Voided events and future-dated events are excluded.
+// Call this after loading clients. It is safe to call multiple times (idempotent).
+
+function projectContractState(client) {
+  const history = client.contract_history;
+  if (!history || history.length === 0) return;
+
+  const today = todayISO();
+
+  const sorted = [...history]
+    .filter(ev => !ev.voided && ev.event_date <= today)
+    .sort((a, b) => {
+      const d = a.event_date.localeCompare(b.event_date);
+      return d !== 0 ? d : (a.logged_at || '').localeCompare(b.logged_at || '');
+    });
+
+  if (sorted.length === 0) return;
+
+  let term, bonus_term, program_start;
+  let period, amount, currency, gst, processor;
+
+  for (const ev of sorted) {
+    if ('term'          in ev && ev.term         !== null) term          = ev.term;
+    if ('bonus_term'    in ev)                             bonus_term    = ev.bonus_term; // null = explicit clear
+    if ('program_start' in ev && ev.program_start !== null) program_start = ev.program_start;
+    if (ev.payment) {
+      const p = ev.payment;
+      if ('period'    in p && p.period    !== null) period    = p.period;
+      if ('amount'    in p && p.amount    !== null) amount    = p.amount;
+      if ('currency'  in p && p.currency  !== null) currency  = p.currency;
+      if ('gst'       in p)                         gst       = p.gst;
+      if ('processor' in p && p.processor !== null) processor = p.processor;
+    }
+  }
+
+  client.contract = client.contract || {};
+  client.payment  = client.payment  || {};
+  client.dates    = client.dates    || {};
+
+  if (term          !== undefined) client.contract.term       = term;
+  if (bonus_term    !== undefined) client.contract.bonus_term = bonus_term;
+  if (program_start !== undefined) client.dates.program_start = program_start;
+  if (period        !== undefined) client.payment.period    = period;
+  if (amount        !== undefined) client.payment.amount    = amount;
+  if (currency      !== undefined) client.payment.currency  = currency;
+  if (gst           !== undefined) client.payment.gst       = gst;
+  if (processor     !== undefined) client.payment.processor = processor;
+}
+
 // ── Health normalisation ──────────────────────────────────────────────────────
 // Spreadsheet export has inconsistent spacing/emoji — normalise to canonical values
 

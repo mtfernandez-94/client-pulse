@@ -1136,6 +1136,53 @@ function openEditModal(idx) {
             </ul>
           </div>
 
+          ${(client.contract_history && client.contract_history.length > 0) ? `
+          <div>
+            <h3 class="text-[11px] font-semibold text-[#4a5568] uppercase tracking-widest mb-3 font-mono">Contract History</h3>
+            <div class="overflow-x-auto">
+              <table class="w-full text-[12px] font-mono">
+                <thead>
+                  <tr class="text-[#4a5568] border-b border-white/[0.04]">
+                    <th class="text-left py-1.5 pr-3 font-medium">Date</th>
+                    <th class="text-left py-1.5 pr-3 font-medium">Event</th>
+                    <th class="text-left py-1.5 pr-3 font-medium">Term</th>
+                    <th class="text-left py-1.5 pr-3 font-medium">Payment</th>
+                    <th class="text-left py-1.5 font-medium">Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${(() => {
+                    return [...client.contract_history]
+                      .filter(ev => !ev.voided)
+                      .sort((a, b) => b.event_date.localeCompare(a.event_date) || (b.logged_at || '').localeCompare(a.logged_at || ''))
+                      .map(ev => {
+                        const isFuture  = ev.event_date > todayISO();
+                        const rowCls    = isFuture ? 'text-[#4a5568] italic' : 'text-[#8892a8]';
+                        const evDate    = fmt(parseDate(ev.event_date)) || ev.event_date;
+                        const evLabel   = ev.event_type ? ev.event_type.replace(/_/g, ' ') : '—';
+                        const evTerm    = [ev.term, ev.bonus_term ? '+' + ev.bonus_term : null].filter(Boolean).join(' ') || '—';
+                        const amtStr    = ev.payment && ev.payment.currency && ev.payment.amount != null
+                          ? ev.payment.currency + ' ' + ev.payment.amount.toLocaleString('en-AU') : null;
+                        const evPayment = ev.payment
+                          ? ([amtStr, ev.payment.period || null, ev.payment.processor || null].filter(Boolean).join(' · ') || '—')
+                          : '—';
+                        const evNotes   = ev.notes ? ev.notes.substring(0, 40) + (ev.notes.length > 40 ? '…' : '') : '';
+                        const futurePill = isFuture ? ' <span class="text-[10px] text-amber-400/70">scheduled</span>' : '';
+                        return '<tr class="' + rowCls + ' border-b border-white/[0.03]">' +
+                          '<td class="py-1.5 pr-3 whitespace-nowrap">' + evDate + futurePill + '</td>' +
+                          '<td class="py-1.5 pr-3 whitespace-nowrap capitalize">' + evLabel + '</td>' +
+                          '<td class="py-1.5 pr-3 whitespace-nowrap">' + evTerm + '</td>' +
+                          '<td class="py-1.5 pr-3 whitespace-nowrap">' + evPayment + '</td>' +
+                          '<td class="py-1.5 text-[#4a5568]">' + evNotes + '</td>' +
+                          '</tr>';
+                      }).join('');
+                  })()}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          ` : ''}
+
           ${(client.pause_history && client.pause_history.length > 0) ? `
           <div>
             <h3 class="text-[11px] font-semibold text-[#4a5568] uppercase tracking-widest mb-3 font-mono">Pause History</h3>
@@ -1199,9 +1246,10 @@ function openEditModal(idx) {
             <button type="button" onclick="showReactivateForm(${idx})" class="px-3.5 py-2 text-[13px] font-medium text-[#8892a8] bg-white/[0.04] hover:bg-white/[0.08] rounded-lg transition-colors border border-white/[0.06]">Reactivate</button>
             ` : ''}
           </div>
-          <button onclick="saveEdit(${idx})" class="px-5 py-2 btn-primary text-[13px] font-semibold text-white rounded-lg">
-            Save Changes
-          </button>
+          <div class="flex items-center gap-2">
+            <button type="button" onclick="openUpdateTermsModal(${idx})" class="px-3.5 py-2 text-[13px] font-medium text-[#8892a8] bg-white/[0.04] hover:bg-white/[0.08] rounded-lg transition-colors border border-white/[0.06]">Update Terms</button>
+            <button onclick="saveEdit(${idx})" class="px-5 py-2 btn-primary text-[13px] font-semibold text-white rounded-lg">Save Changes</button>
+          </div>
         </div>
       </div>
     </div>`;
@@ -1558,6 +1606,41 @@ function openRenewalModal(idx) {
               </select>
             </div>
 
+            <!-- Payment at renewal (pre-filled; change if rate changes) -->
+            <div>
+              <label class="block text-[12px] font-medium text-[#64748b] mb-1">Payment at renewal</label>
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label class="block text-[11px] text-[#4a5568] mb-1">Period</label>
+                  <select id="renewal-period" class="${inputCls}">
+                    ${(schemaCache?.fields?.payment?.fields?.period?.options || []).map(o =>
+                      `<option value="${o}" ${o === client.payment?.period ? 'selected' : ''}>${o}</option>`
+                    ).join('')}
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-[11px] text-[#4a5568] mb-1">Processor</label>
+                  <select id="renewal-processor" class="${inputCls}">
+                    ${(schemaCache?.fields?.payment?.fields?.processor?.options || []).map(o =>
+                      `<option value="${o}" ${o === client.payment?.processor ? 'selected' : ''}>${o}</option>`
+                    ).join('')}
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-[11px] text-[#4a5568] mb-1">Currency</label>
+                  <select id="renewal-currency" class="${inputCls}">
+                    ${(schemaCache?.fields?.payment?.fields?.currency?.options || []).map(o =>
+                      `<option value="${o}" ${o === client.payment?.currency ? 'selected' : ''}>${o}</option>`
+                    ).join('')}
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-[11px] text-[#4a5568] mb-1">Amount</label>
+                  <input type="number" id="renewal-amount" class="${inputCls}" value="${client.payment?.amount ?? ''}" step="any">
+                </div>
+              </div>
+            </div>
+
             <!-- Start mode toggle -->
             <div>
               <label class="block text-[12px] font-medium text-[#64748b] mb-2">Start date</label>
@@ -1643,10 +1726,13 @@ function submitRenewal(idx) {
   const term      = document.getElementById('renewal-term')?.value || null;
   const startMode = document.getElementById('renewal-start-mode')?.value || 'extend';
 
+  const numVal = id => { const v = document.getElementById(id)?.value; return v === '' || v == null ? null : Number(v); };
+
   client.renewal = { status: outcome, actioned_date: todayISO(), notes: null };
 
+  let newStart = null;
+
   if (outcome === 'renewed') {
-    let newStart = null;
     if (startMode === 'delayed') {
       newStart = document.getElementById('renewal-delayed-start')?.value || null;
     } else {
@@ -1659,11 +1745,39 @@ function submitRenewal(idx) {
       }
     }
     if (newStart) {
-      client.dates           = client.dates || {};
+      client.dates               = client.dates || {};
       client.dates.program_start = newStart;
-      client.dates.weeks_paused  = 0; // fresh program
+      client.dates.weeks_paused  = 0;
     }
     if (term) client.contract = { ...client.contract, term };
+
+    // Capture payment at renewal (may have changed)
+    const renewPeriod    = document.getElementById('renewal-period')?.value    || client.payment?.period;
+    const renewProcessor = document.getElementById('renewal-processor')?.value || client.payment?.processor;
+    const renewCurrency  = document.getElementById('renewal-currency')?.value  || client.payment?.currency;
+    const renewAmount    = numVal('renewal-amount') ?? client.payment?.amount;
+    client.payment = { ...client.payment, period: renewPeriod, processor: renewProcessor, currency: renewCurrency, amount: renewAmount };
+
+    // Append renew event to contract_history
+    if (!client.contract_history) client.contract_history = [];
+    client.contract_history.push({
+      id:             crypto.randomUUID(),
+      event_date:     newStart || todayISO(),
+      logged_at:      new Date().toISOString(),
+      event_type:     'renew',
+      term:           term || client.contract?.term || null,
+      bonus_term:     client.contract?.bonus_term ?? null,
+      program_start:  newStart || null,
+      payment: {
+        period:    renewPeriod    ?? null,
+        amount:    renewAmount    ?? null,
+        currency:  renewCurrency  ?? null,
+        gst:       client.payment?.gst ?? null,
+        processor: renewProcessor ?? null,
+      },
+      notes:           notes || null,
+      manual_override: startMode === 'delayed',
+    });
   }
 
   if (notes) {
@@ -1682,6 +1796,187 @@ function submitRenewal(idx) {
   render();
   renderStats();
   showToast(`Renewal saved — ${outcome}`);
+}
+
+// ── Update Terms (mid-term rate / payment / term changes) ─────────────────────
+
+function openUpdateTermsModal(idx) {
+  const client = allClients[idx];
+  if (!client) return;
+  const modal = document.getElementById('add-client-modal');
+  if (!modal) return;
+
+  const f = schemaCache?.fields || {};
+  const inputCls = 'input-dark w-full bg-[#0a0d13] border border-white/[0.08] rounded-lg px-3 py-2.5 text-[13px] text-[#e2e8f0] focus:outline-none transition-all placeholder-[#4a5568]';
+
+  const termOpts = (f.contract?.fields?.term?.options || [])
+    .map(o => `<option value="${o}" ${o === client.contract?.term ? 'selected' : ''}>${o}</option>`).join('');
+  const bonusOpts = `<option value="">None</option>` + (f.contract?.fields?.bonus_term?.options || [])
+    .map(o => `<option value="${o}" ${o === client.contract?.bonus_term ? 'selected' : ''}>${o}</option>`).join('');
+  const periodOpts = (f.payment?.fields?.period?.options || [])
+    .map(o => `<option value="${o}" ${o === client.payment?.period ? 'selected' : ''}>${o}</option>`).join('');
+  const currencyOpts = (f.payment?.fields?.currency?.options || [])
+    .map(o => `<option value="${o}" ${o === client.payment?.currency ? 'selected' : ''}>${o}</option>`).join('');
+  const processorOpts = (f.payment?.fields?.processor?.options || [])
+    .map(o => `<option value="${o}" ${o === client.payment?.processor ? 'selected' : ''}>${o}</option>`).join('');
+
+  modal.classList.remove('hidden');
+  modal.innerHTML = `
+    <div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" onclick="closeModal()"></div>
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div class="modal-panel rounded-2xl w-full max-w-lg max-h-[90vh] overflow-hidden border border-white/[0.06]">
+        <div class="px-6 pt-6 pb-4 flex items-center justify-between">
+          <h2 class="text-base font-semibold text-white">Update Terms — ${client.name}</h2>
+          <button type="button" onclick="closeModal()" class="text-[#4a5568] hover:text-[#8892a8] text-lg leading-none transition-colors">&times;</button>
+        </div>
+
+        <div class="px-6 py-5 space-y-5 overflow-y-auto max-h-[65vh]">
+
+          <!-- Event type + effective date -->
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-[12px] font-medium text-[#64748b] mb-1">Change type</label>
+              <select id="ut-type" class="${inputCls}">
+                <option value="rate_change">Rate change</option>
+                <option value="payment_change">Payment period change</option>
+                <option value="term_extension">Term change / extension</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[12px] font-medium text-[#64748b] mb-1">Effective date</label>
+              <input type="text" id="ut-effective-date" class="${inputCls}" placeholder="Select date…" value="${todayISO()}">
+            </div>
+          </div>
+
+          <!-- Contract fields -->
+          <div>
+            <h3 class="text-[11px] font-semibold text-[#4a5568] uppercase tracking-widest mb-2 font-mono">Contract</h3>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-[12px] font-medium text-[#64748b] mb-1">Term</label>
+                <select id="ut-term" class="${inputCls}">${termOpts}</select>
+              </div>
+              <div>
+                <label class="block text-[12px] font-medium text-[#64748b] mb-1">Bonus term</label>
+                <select id="ut-bonus" class="${inputCls}">${bonusOpts}</select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Payment fields -->
+          <div>
+            <h3 class="text-[11px] font-semibold text-[#4a5568] uppercase tracking-widest mb-2 font-mono">Payment</h3>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-[12px] font-medium text-[#64748b] mb-1">Period</label>
+                <select id="ut-period" class="${inputCls}">${periodOpts}</select>
+              </div>
+              <div>
+                <label class="block text-[12px] font-medium text-[#64748b] mb-1">Processor</label>
+                <select id="ut-processor" class="${inputCls}">${processorOpts}</select>
+              </div>
+              <div>
+                <label class="block text-[12px] font-medium text-[#64748b] mb-1">Currency</label>
+                <select id="ut-currency" class="${inputCls}">${currencyOpts}</select>
+              </div>
+              <div>
+                <label class="block text-[12px] font-medium text-[#64748b] mb-1">Amount</label>
+                <input type="number" id="ut-amount" class="${inputCls}" value="${client.payment?.amount ?? ''}" step="any">
+              </div>
+            </div>
+          </div>
+
+          <!-- Notes -->
+          <div>
+            <label class="block text-[12px] font-medium text-[#64748b] mb-1">Notes (reason / context)</label>
+            <textarea id="ut-notes" rows="2" class="${inputCls} resize-none" placeholder="e.g. switched to fortnightly to match payday…"></textarea>
+          </div>
+
+        </div>
+
+        <div class="px-6 py-4 border-t border-white/[0.06] flex justify-end gap-2">
+          <button type="button" onclick="closeModal()" class="px-3.5 py-2 text-[13px] font-medium text-[#64748b] hover:text-[#e2e8f0] transition-colors">Cancel</button>
+          <button type="button" onclick="submitUpdateTerms(${idx})" class="px-5 py-2 btn-primary text-[13px] font-semibold text-white rounded-lg">Save change</button>
+        </div>
+      </div>
+    </div>`;
+
+  if (window.flatpickr) {
+    const el = document.getElementById('ut-effective-date');
+    if (el) flatpickr(el, { ...FP_CFG });
+  }
+}
+
+function submitUpdateTerms(idx) {
+  const client = allClients[idx];
+  if (!client) return;
+
+  const val    = id => document.getElementById(id)?.value || null;
+  const numVal = id => { const v = document.getElementById(id)?.value; return v === '' || v == null ? null : Number(v); };
+
+  const eventType    = val('ut-type')           || 'rate_change';
+  const effectiveDate = val('ut-effective-date') || todayISO();
+  const term         = val('ut-term');
+  const bonus        = val('ut-bonus');          // '' means None → null
+  const period       = val('ut-period');
+  const processor    = val('ut-processor');
+  const currency     = val('ut-currency');
+  const amount       = numVal('ut-amount');
+  const notes        = val('ut-notes')?.trim()   || null;
+
+  // Build event — only include payment/contract fields that differ from current
+  const ev = {
+    id:             crypto.randomUUID(),
+    event_date:     effectiveDate,
+    logged_at:      new Date().toISOString(),
+    event_type:     eventType,
+    notes,
+    manual_override: effectiveDate !== todayISO(),
+  };
+
+  if (term    && term    !== client.contract?.term)       ev.term      = term;
+  const newBonus = bonus || null;
+  if (newBonus !== (client.contract?.bonus_term ?? null)) ev.bonus_term = newBonus;
+
+  const paymentChanged = {};
+  if (period    && period    !== client.payment?.period)    paymentChanged.period    = period;
+  if (processor && processor !== client.payment?.processor) paymentChanged.processor = processor;
+  if (currency  && currency  !== client.payment?.currency)  paymentChanged.currency  = currency;
+  if (amount    != null && amount !== client.payment?.amount) paymentChanged.amount  = amount;
+  if (Object.keys(paymentChanged).length > 0) ev.payment = paymentChanged;
+
+  // Require at least one change
+  const hasContractChange = 'term' in ev || 'bonus_term' in ev;
+  const hasPaymentChange  = 'payment' in ev;
+  if (!hasContractChange && !hasPaymentChange) {
+    showToast('No changes detected — nothing saved.');
+    return;
+  }
+
+  // Apply to client (write-through) and push event
+  if (ev.term)         client.contract = { ...client.contract, term: ev.term };
+  if ('bonus_term' in ev) client.contract = { ...client.contract, bonus_term: ev.bonus_term };
+  if (ev.payment) {
+    client.payment = { ...client.payment, ...ev.payment };
+  }
+
+  if (!client.contract_history) client.contract_history = [];
+  client.contract_history.push(ev);
+
+  if (notes) {
+    if (!client.client_notes) client.client_notes = [];
+    client.client_notes.push({
+      id:   crypto.randomUUID(),
+      date: new Date().toISOString(),
+      note: `**Terms updated (${eventType.replace(/_/g, ' ')})**${notes ? '\n' + notes : ''}`,
+    });
+  }
+
+  saveClients(idx);
+  closeModal();
+  render();
+  renderStats();
+  showToast(`Terms updated — ${eventType.replace(/_/g, ' ')}`);
 }
 
 // ── Archive / Reactivate ──────────────────────────────────────────────────────
@@ -3002,6 +3297,42 @@ async function handleSignOut() {
   showLogin();
 }
 
+// ── Contract history migration ────────────────────────────────────────────────
+// One-time migration: any client without contract_history gets a synthetic 'sign'
+// event built from their existing contract/payment/dates. Saved immediately so
+// future sessions skip the migration path.
+
+async function migrateContractHistories(clients, coachId) {
+  const toSave = [];
+  for (const client of clients) {
+    if (client.contract_history && client.contract_history.length > 0) continue;
+    client.contract_history = [{
+      id:             crypto.randomUUID(),
+      event_date:     client.dates?.client_start || client.dates?.program_start || todayISO(),
+      logged_at:      new Date().toISOString(),
+      event_type:     'sign',
+      term:           client.contract?.term           || null,
+      bonus_term:     client.contract?.bonus_term     ?? null,
+      program_start:  client.dates?.program_start     || null,
+      payment: {
+        period:    client.payment?.period    ?? null,
+        amount:    client.payment?.amount    ?? null,
+        currency:  client.payment?.currency  ?? null,
+        gst:       client.payment?.gst       ?? null,
+        processor: client.payment?.processor ?? null,
+      },
+      notes:           'Migrated from existing record',
+      manual_override: false,
+    }];
+    toSave.push(client);
+  }
+  if (toSave.length > 0) {
+    console.log(`[contract_history] Migrating ${toSave.length} clients…`);
+    for (const c of toSave) await sbSaveClient(c, coachId);
+    console.log('[contract_history] Migration complete.');
+  }
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 async function init() {
@@ -3042,6 +3373,11 @@ async function init() {
     }
 
     allClients = supaClients;
+
+    // 4a. Contract history migration (one-time, skipped once each client has history)
+    await migrateContractHistories(allClients, session.user.id);
+    // 4b. Project contract state onto each client (derives current term/payment from log)
+    allClients.forEach(projectContractState);
 
     // 5. Build health style maps from schema
     const healthOptions = schema.fields.health.options || [];

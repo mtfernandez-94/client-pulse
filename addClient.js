@@ -163,30 +163,46 @@ async function submitNewClient() {
   const num = id => { const v = document.getElementById(id)?.value; return v === '' ? 0 : Number(v); };
   const chk = id => document.getElementById(id)?.checked || false;
 
+  const payment = {
+    period:    val('add-period'),
+    currency:  val('add-currency'),
+    amount:    num('add-amount'),
+    gst:       chk('add-gst'),
+    processor: val('add-processor'),
+  };
+  const contract = {
+    term:       val('add-term'),
+    bonus_term: val('add-bonus') || null,
+  };
+  const programStart = val('add-program-start');
+
   const client = {
     name:   val('add-name'),
     status: 'active',                // auto-assigned
     health: '🆕 Onboarding',         // auto-assigned
-    payment: {
-      period:    val('add-period'),
-      currency:  val('add-currency'),
-      amount:    num('add-amount'),
-      gst:       chk('add-gst'),
-      processor: val('add-processor'),
-    },
-    contract: {
-      term:       val('add-term'),
-      bonus_term: val('add-bonus') || null,
-    },
+    payment,
+    contract,
     dates: {
       client_start:  val('add-client-start'),
-      program_start: val('add-program-start'),
+      program_start: programStart,
       weeks_paused:  0,
     },
     renewal:       { status: 'pending' },
     reviews:       {},
     pause_history: [],
-    notes:         '',
+    contract_history: [{
+      id:             crypto.randomUUID(),
+      event_date:     programStart,
+      logged_at:      new Date().toISOString(),
+      event_type:     'sign',
+      term:           contract.term,
+      bonus_term:     contract.bonus_term,
+      program_start:  programStart,
+      payment:        { ...payment },
+      notes:          null,
+      manual_override: false,
+    }],
+    notes: '',
   };
 
   try {
