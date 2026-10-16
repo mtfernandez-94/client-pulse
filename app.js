@@ -11,7 +11,6 @@ let filterStatus = 'active';
 let filterHealth = '';
 let filterTerm   = '';
 let filterRenewalsOnly = false;
-let filterReviewsOnly  = false;
 let sortCol = 'name';
 let sortDir = 'asc';
 let viewMode = 'table'; // 'table' | 'gantt' | 'actions' | 'analytics'
@@ -45,7 +44,6 @@ const STATUS_STYLE = {
 const CALC_FNS = {
   'calc.end_of_commitment': c => endOfCommitment(c, termToDays, bonusToDays),
   'calc.renew_contact':     c => renewContact(c, termToDays, bonusToDays),
-  'calc.next_review':       c => nextReview(c, termToDays, bonusToDays),
 };
 function getCalc(key) { return CALC_FNS[key] || null; }
 
@@ -60,7 +58,6 @@ function getVisible() {
   if (filterHealth)            list = list.filter(c => c._health === filterHealth);
   if (filterTerm)              list = list.filter(c => c.contract?.term === filterTerm);
   if (filterRenewalsOnly)      list = list.filter(c => renewalFlag(c, termToDays, bonusToDays));
-  if (filterReviewsOnly)       list = list.filter(c => reviewFlag(c, termToDays, bonusToDays));
   if (searchQuery) {
     const q = searchQuery.toLowerCase();
     list = list.filter(c => c.name.toLowerCase().includes(q));
@@ -70,7 +67,6 @@ function getVisible() {
   list.forEach(c => {
     c._endDate       = endOfCommitment(c, termToDays, bonusToDays)?.getTime() ?? 9e15;
     c._urgency       = urgencyScore(c, termToDays, bonusToDays);
-    c._nextReview    = nextReview(c, termToDays, bonusToDays)?.getTime() ?? 9e15;
     c._programStart  = parseDate(c.dates?.program_start)?.getTime() ?? 0;
   });
 
@@ -105,8 +101,6 @@ function getVisible() {
         diff = a._endDate - b._endDate; break;
       case 'renewalUrgency':
         diff = a._urgency - b._urgency; break;
-      case 'nextReview':
-        diff = a._nextReview - b._nextReview; break;
     }
     return sortDir === 'asc' ? diff : -diff;
   });
@@ -118,6 +112,19 @@ function getVisible() {
 
 function getPath(obj, path) {
   return path.split('.').reduce((o, k) => o?.[k], obj);
+}
+
+// Display label for an enum option: schema `labels` map, else the raw value.
+// e.g. term "M2M" → "Month-to-month"
+function optionLabel(def, value) {
+  return def?.labels?.[value] ?? value;
+}
+
+// <option> list for a schema enum, with labels and the current value selected.
+function enumOptions(def, selected) {
+  return (def?.options || [])
+    .map(o => `<option value="${o}" ${o === selected ? 'selected' : ''}>${optionLabel(def, o)}</option>`)
+    .join('');
 }
 
 // ── Rendering helpers ─────────────────────────────────────────────────────────
@@ -204,30 +211,26 @@ function renderCell(client, col) {
     }
 
     case 'calc_date': {
-      const fn = getCalc(col.key);
-      return `<td class="${TD_MUTED}">${fmt(fn?.(client))}</td>`;
+      const val = getCalc(col.key)?.(client);
+      if (!val && isRollingTerm(client, termToDays)) {
+        return `<td class="${TD_MUTED}"><span class="text-[#8892a8]" title="Month-to-month — no fixed end">↻ Rolling</span></td>`;
+      }
+      return `<td class="${TD_MUTED}">${fmt(val)}</td>`;
     }
 
     case 'renewal_flag': {
+      if (isRollingTerm(client, termToDays)) {
+        return `<td class="${TD_MUTED}"><span class="text-[#4a5568]" title="Month-to-month — no renewal date">—</span></td>`;
+      }
       const rc = renewContact(client, termToDays, bonusToDays);
+      if (!rc) {
+        const reason = diagnoseMissingDates(client, termToDays);
+        if (reason) return `<td class="${TD_MUTED}"><span class="text-amber-400/70 text-[11px]" title="${reason}">⚠ Missing data</span></td>`;
+      }
       const rf = renewalFlag(client, termToDays, bonusToDays);
       const cls = rf ? 'font-medium text-white font-mono text-[12px]' : 'text-[#64748b] font-mono text-[12px]';
       const clickable = rf && client.renewal?.status === 'pending' ? ` onclick="openRenewalModal(${idx})" class="cursor-pointer hover:bg-white/[0.04] rounded-md transition-colors"` : '';
       return `<td class="${TD}"${clickable}><span class="${cls}">${fmt(rc)}</span>${flagBadge(rf)}</td>`;
-    }
-
-    case 'review_flag': {
-      const nri = nextReviewInfo(client, termToDays, bonusToDays);
-      if (!nri) {
-        const reason = diagnoseMissingReviews(client, termToDays, bonusToDays);
-        if (reason) return `<td class="${TD_MUTED}"><span class="text-amber-400/70 text-[11px]" title="${reason}">⚠ Missing data</span></td>`;
-        return `<td class="${TD_MUTED}"><span class="text-[#4a5568]">—</span></td>`;
-      }
-      const nr  = nri.date;
-      const rvf = reviewFlag(client, termToDays, bonusToDays);
-      const cls = rvf ? 'font-medium text-white font-mono text-[12px]' : 'text-[#64748b] font-mono text-[12px]';
-      const clickable = nri && rvf ? ` onclick="openReviewModal(${idx}, ${nri.reviewNum})" class="cursor-pointer hover:bg-white/[0.04] rounded-md transition-colors"` : '';
-      return `<td class="${TD}"${clickable}><span class="${cls}">${fmt(nr)}</span>${flagBadge(rvf)}</td>`;
     }
 
     default:
@@ -470,14 +473,12 @@ function kpiCard(value, label, color, bgColor, filterKey = null, isActive = fals
 
 function setKpiFilter(key) {
   filterRenewalsOnly = false;
-  filterReviewsOnly  = false;
   switch (key) {
     case 'all':      filterStatus = 'all';      break;
     case 'active':   filterStatus = 'active';   break;
     case 'paused':   filterStatus = 'paused';   break;
     case 'archived': filterStatus = 'archived'; break;
     case 'renewals': filterStatus = 'active'; filterRenewalsOnly = true; break;
-    case 'reviews':  filterStatus = 'active'; filterReviewsOnly  = true; break;
   }
   viewMode = 'table';
   render();
@@ -493,7 +494,6 @@ function renderStats() {
 
   // Urgency counts
   const renewalsDue = activeClients.filter(c => renewalFlag(c, termToDays, bonusToDays)).length;
-  const reviewsDue = activeClients.filter(c => reviewFlag(c, termToDays, bonusToDays)).length;
 
   // Health distribution bar
   const healthOptions = schemaCache?.fields?.health?.options || [];
@@ -510,15 +510,14 @@ function renderStats() {
     return `<div class="health-bar-segment rounded-sm" style="width:${pct}%;background:${colors.border};box-shadow:0 0 8px ${colors.border}40;" title="${h}: ${count}"></div>`;
   }).join('');
 
-  const noSpecial  = !filterRenewalsOnly && !filterReviewsOnly;
+  const noSpecial  = !filterRenewalsOnly;
   document.getElementById('stats').innerHTML = `
-    <div class="grid grid-cols-3 sm:grid-cols-6 gap-3 mb-4">
+    <div class="grid grid-cols-3 sm:grid-cols-5 gap-3 mb-4">
       ${kpiCard(total,       'Total Clients',  '#818cf8', 'rgba(129,140,248,0.15)',  'all',      filterStatus==='all'      && noSpecial)}
       ${kpiCard(active,      'Active',          '#34d399', 'rgba(52,211,153,0.15)',   'active',   filterStatus==='active'   && noSpecial)}
       ${kpiCard(paused,      'Paused',          '#fbbf24', 'rgba(251,191,36,0.15)',   'paused',   filterStatus==='paused'   && noSpecial)}
       ${kpiCard(archived,    'Archived',        '#64748b', 'rgba(100,116,139,0.1)',   'archived', filterStatus==='archived' && noSpecial)}
       ${kpiCard(renewalsDue, 'Renewals Due',    renewalsDue > 0 ? '#f87171' : '#64748b', renewalsDue > 0 ? 'rgba(248,113,113,0.15)' : 'rgba(100,116,139,0.1)', 'renewals', filterRenewalsOnly)}
-      ${kpiCard(reviewsDue,  'Reviews Due',     reviewsDue > 0  ? '#fbbf24' : '#64748b', reviewsDue  > 0 ? 'rgba(251,191,36,0.15)'  : 'rgba(100,116,139,0.1)', 'reviews',  filterReviewsOnly)}
     </div>
     ${active > 0 ? `<div class="flex h-1.5 rounded-full overflow-hidden gap-0.5">${barSegments}</div>` : ''}
   `;
@@ -553,8 +552,9 @@ function exportCSV() {
           return `${p.currency || ''} ${p.amount ?? ''}${p.gst ? ' +GST' : ''}`;
         }
         case 'calc_date': {
-          const fn = getCalc(col.key);
-          return fn ? fmt(fn(c)) : '';
+          const val = getCalc(col.key)?.(c);
+          if (!val && isRollingTerm(c, termToDays)) return 'Rolling';
+          return fmt(val);
         }
         case 'renewal_flag': {
           const rc = renewContact(c, termToDays, bonusToDays);
@@ -562,14 +562,6 @@ function exportCSV() {
           let val = fmt(rc);
           if (rf === 'overdue') val += ' (Overdue)';
           else if (rf === 'soon') val += ' (This week)';
-          return val;
-        }
-        case 'review_flag': {
-          const nr = nextReview(c, termToDays, bonusToDays);
-          const rvf = reviewFlag(c, termToDays, bonusToDays);
-          let val = fmt(nr);
-          if (rvf === 'overdue') val += ' (Overdue)';
-          else if (rvf === 'soon') val += ' (This week)';
           return val;
         }
         case 'date': {
@@ -680,7 +672,6 @@ function setupEvents() {
     document.getElementById(`filter-${s}`)?.addEventListener('click', () => {
       filterStatus = s;
       filterRenewalsOnly = false;
-      filterReviewsOnly  = false;
       render();
       renderStats();
     });
@@ -926,84 +917,6 @@ function cancelFlagReason(idx) {
   render();
 }
 
-function markReviewComplete(idx, reviewNum) {
-  const c = allClients[idx];
-  if (!c) return;
-  const key = `review_${reviewNum}`;
-  c.reviews = c.reviews || {};
-  c.reviews[key] = { ...c.reviews[key], completed: true, completed_date: todayISO() };
-  saveClients(idx);
-  openEditModal(idx);
-  render();
-}
-
-// ── Review completion modal ──────────────────────────────────────────────────
-
-function openReviewModal(idx, reviewNum) {
-  const client = allClients[idx];
-  if (!client) return;
-  const reviews = calculateReviews(client, termToDays, bonusToDays);
-  const review = reviews.find(r => r.reviewNum === reviewNum);
-  if (!review || review.completed) return;
-
-  const modal = document.getElementById('add-client-modal');
-  if (!modal) return;
-  const inputCls = 'input-dark w-full bg-[#0a0d13] border border-white/[0.08] rounded-lg px-3 py-2.5 text-[13px] text-[#e2e8f0] focus:outline-none transition-all placeholder-[#4a5568]';
-  const reviewDate = fmt(review.date);
-  const overdue = review.date < getToday();
-
-  modal.classList.remove('hidden');
-  modal.innerHTML = `
-    <div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" onclick="closeModal()"></div>
-    <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div class="modal-panel rounded-2xl w-full max-w-lg border border-white/[0.06]">
-        <div class="px-6 pt-6 pb-4 flex items-center justify-between">
-          <h2 class="text-base font-semibold text-white">Review ${reviewNum}: ${client.name}</h2>
-          <button type="button" onclick="closeModal()" class="text-[#4a5568] hover:text-[#8892a8] text-lg leading-none transition-colors">&times;</button>
-        </div>
-        <div class="px-6 py-5 space-y-4">
-          <div class="flex items-center gap-3 text-[13px]">
-            <span class="text-[#64748b]">Due date:</span>
-            <span class="${overdue ? 'font-semibold text-rose-400' : 'text-white'} font-mono">${reviewDate}${overdue ? ' (overdue)' : ''}</span>
-          </div>
-          <div>
-            <label class="block text-[12px] font-medium text-[#64748b] mb-1">Notes (optional)</label>
-            <textarea id="review-notes" class="${inputCls}" rows="3" placeholder="e.g. Progressing well, increase difficulty next block"></textarea>
-          </div>
-        </div>
-        <div class="px-6 py-4 border-t border-white/[0.06] flex justify-end gap-2">
-          <button type="button" onclick="closeModal()" class="px-3.5 py-2 text-[13px] font-medium text-[#64748b] hover:text-[#e2e8f0] transition-colors">Cancel</button>
-          <button type="button" onclick="submitReview(${idx}, ${reviewNum})" class="px-5 py-2 btn-primary text-[13px] font-semibold text-white rounded-lg">Mark complete</button>
-        </div>
-      </div>
-    </div>`;
-}
-
-function submitReview(idx, reviewNum) {
-  const client = allClients[idx];
-  if (!client) return;
-  const notes = document.getElementById('review-notes')?.value?.trim() || null;
-  const key   = `review_${reviewNum}`;
-  client.reviews = client.reviews || {};
-  client.reviews[key] = { ...client.reviews[key], completed: true, completed_date: todayISO(), notes };
-
-  // Also save review notes to client_notes
-  if (notes) {
-    if (!client.client_notes) client.client_notes = [];
-    client.client_notes.push({
-      id:   crypto.randomUUID(),
-      date: new Date().toISOString(),
-      note: `**Review ${reviewNum} completed**\n${notes}`,
-    });
-  }
-
-  saveClients(idx);
-  closeModal();
-  render();
-  renderStats();
-  showToast(`Review ${reviewNum} marked complete`);
-}
-
 function openEditModal(idx) {
   const client = allClients[idx];
   if (!client || !schemaCache) return;
@@ -1012,7 +925,8 @@ function openEditModal(idx) {
   const modal = document.getElementById('add-client-modal');
   modal.classList.remove('hidden');
 
-  const reviewsList = calculateReviews(client, termToDays, bonusToDays);
+  const rolling     = isRollingTerm(client, termToDays);
+  const datesIssue  = diagnoseMissingDates(client, termToDays);
   const inputCls = 'input-dark w-full bg-[#0a0d13] border border-white/[0.08] rounded-lg px-3 py-2.5 text-[13px] text-[#e2e8f0] focus:outline-none transition-all placeholder-[#4a5568]';
 
   function selectOpts(options, selected) {
@@ -1054,7 +968,7 @@ function openEditModal(idx) {
             <div class="grid grid-cols-2 gap-3">
               <div>
                 <label class="block text-[12px] font-medium text-[#64748b] mb-1">Term</label>
-                <select id="edit-term" class="${inputCls}">${selectOpts(f.contract.fields.term.options, client.contract?.term)}</select>
+                <select id="edit-term" class="${inputCls}">${enumOptions(f.contract.fields.term, client.contract?.term)}</select>
               </div>
               <div>
                 <label class="block text-[12px] font-medium text-[#64748b] mb-1">Bonus Term</label>
@@ -1107,33 +1021,14 @@ function openEditModal(idx) {
             <div class="grid grid-cols-2 gap-3 mt-3">
               <div>
                 <label class="block text-[12px] font-medium text-[#64748b] mb-1">Renewal Contact</label>
-                <div class="w-full bg-[#0a0d13] border border-white/[0.05] rounded-lg px-3 py-2.5 text-[13px] text-[#4a5568] cursor-default font-mono">${fmt(renewContact(client, termToDays, bonusToDays)) || '—'}</div>
+                <div class="w-full bg-[#0a0d13] border border-white/[0.05] rounded-lg px-3 py-2.5 text-[13px] text-[#4a5568] cursor-default font-mono">${rolling ? 'None — rolling' : fmt(renewContact(client, termToDays, bonusToDays))}</div>
               </div>
               <div>
                 <label class="block text-[12px] font-medium text-[#64748b] mb-1">Program End</label>
-                <div class="w-full bg-[#0a0d13] border border-white/[0.05] rounded-lg px-3 py-2.5 text-[13px] text-[#4a5568] cursor-default font-mono">${fmt(endOfCommitment(client, termToDays, bonusToDays)) || '—'}</div>
+                <div class="w-full bg-[#0a0d13] border border-white/[0.05] rounded-lg px-3 py-2.5 text-[13px] text-[#4a5568] cursor-default font-mono">${rolling ? '↻ Month-to-month' : fmt(endOfCommitment(client, termToDays, bonusToDays))}</div>
               </div>
             </div>
-          </div>
-
-          <div>
-            <h3 class="text-[11px] font-semibold text-[#4a5568] uppercase tracking-widest mb-3 font-mono">Reviews</h3>
-            <ul class="space-y-2 text-sm">
-              ${reviewsList.length ? reviewsList.map(r => {
-                const dateStr = fmt(r.date);
-                if (r.completed) {
-                  const doneStr = r.completed_date ? fmt(parseDate(r.completed_date)) : '—';
-                  const noteStr = r.notes ? `<br><span class="text-[#4a5568] text-xs ml-4">↳ ${r.notes}</span>` : '';
-                  return `<li class="text-[#64748b]">Review ${r.reviewNum}: ${dateStr} <span class="text-emerald-400/60">✓ done ${doneStr}</span>${noteStr}</li>`;
-                }
-                return `<li class="text-[#e2e8f0]">Review ${r.reviewNum}: ${dateStr} <button type="button" onclick="openReviewModal(${idx}, ${r.reviewNum})" class="ml-2 text-xs text-indigo-400 hover:underline">Complete review</button></li>`;
-              }).join('') : (() => {
-                const reason = diagnoseMissingReviews(client, termToDays, bonusToDays);
-                return reason
-                  ? `<li class="text-amber-400/70 text-[12px]">⚠ ${reason}</li>`
-                  : '<li class="text-[#4a5568]">No reviews in this term.</li>';
-              })()}
-            </ul>
+            ${datesIssue ? `<p class="text-amber-400/70 text-[12px] mt-2">⚠ ${datesIssue}</p>` : ''}
           </div>
 
           ${(client.contract_history && client.contract_history.length > 0) ? `
@@ -1275,6 +1170,7 @@ function saveEdit(idx) {
   const chk = id => document.getElementById(id)?.checked || false;
 
   const c = allClients[idx];
+  const before = contractSnapshot(c);
   c.name = val('edit-name');
 
   // Update health from the dropdown
@@ -1321,6 +1217,7 @@ function saveEdit(idx) {
     };
   }
 
+  logContractEdit(c, before, 'edit', 'Edited in client details');
   saveClients(idx);
   closeModal();
   render();
@@ -1600,9 +1497,7 @@ function openRenewalModal(idx) {
             <div>
               <label class="block text-[12px] font-medium text-[#64748b] mb-1">New term</label>
               <select id="renewal-term" class="${inputCls}">
-                ${(schemaCache?.fields?.contract?.fields?.term?.options || []).map(o =>
-                  `<option value="${o}" ${o === client.contract?.term ? 'selected' : ''}>${o}</option>`
-                ).join('')}
+                ${enumOptions(schemaCache?.fields?.contract?.fields?.term, client.contract?.term)}
               </select>
             </div>
 
@@ -1809,8 +1704,7 @@ function openUpdateTermsModal(idx) {
   const f = schemaCache?.fields || {};
   const inputCls = 'input-dark w-full bg-[#0a0d13] border border-white/[0.08] rounded-lg px-3 py-2.5 text-[13px] text-[#e2e8f0] focus:outline-none transition-all placeholder-[#4a5568]';
 
-  const termOpts = (f.contract?.fields?.term?.options || [])
-    .map(o => `<option value="${o}" ${o === client.contract?.term ? 'selected' : ''}>${o}</option>`).join('');
+  const termOpts = enumOptions(f.contract?.fields?.term, client.contract?.term);
   const bonusOpts = `<option value="">None</option>` + (f.contract?.fields?.bonus_term?.options || [])
     .map(o => `<option value="${o}" ${o === client.contract?.bonus_term ? 'selected' : ''}>${o}</option>`).join('');
   const periodOpts = (f.payment?.fields?.period?.options || [])
@@ -1935,6 +1829,12 @@ function submitUpdateTerms(idx) {
   };
 
   if (term    && term    !== client.contract?.term)       ev.term      = term;
+  // Switching between a fixed term and month-to-month starts a new program on
+  // the effective date (as a renewal does) — otherwise e.g. a long M2M client
+  // moving onto 12wks would be measured from their old start and be instantly overdue.
+  if (ev.term && isRollingTerm(client, termToDays) !== isRollingTerm({ contract: { term: ev.term } }, termToDays)) {
+    ev.program_start = effectiveDate;
+  }
   const newBonus = bonus || null;
   if (newBonus !== (client.contract?.bonus_term ?? null)) ev.bonus_term = newBonus;
 
@@ -1955,6 +1855,7 @@ function submitUpdateTerms(idx) {
 
   // Apply to client (write-through) and push event
   if (ev.term)         client.contract = { ...client.contract, term: ev.term };
+  if (ev.program_start) client.dates   = { ...client.dates, program_start: ev.program_start, weeks_paused: 0 };
   if ('bonus_term' in ev) client.contract = { ...client.contract, bonus_term: ev.bonus_term };
   if (ev.payment) {
     client.payment = { ...client.payment, ...ev.payment };
@@ -2059,7 +1960,7 @@ function showReactivateForm(idx) {
   if (!modal) return;
   const f = schemaCache?.fields;
   const inputCls = 'input-dark w-full bg-[#0a0d13] border border-white/[0.08] rounded-lg px-3 py-2.5 text-[13px] text-[#e2e8f0] focus:outline-none transition-all placeholder-[#4a5568]';
-  const termOpts = f?.contract?.fields?.term?.options ? f.contract.fields.term.options.map(o => `<option value="${o}" ${o === (client.contract?.term) ? 'selected' : ''}>${o}</option>`).join('') : '';
+  const termOpts = enumOptions(f?.contract?.fields?.term, client.contract?.term);
   modal.classList.remove('hidden');
   modal.innerHTML = `
     <div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" onclick="closeModal()"></div>
@@ -2097,11 +1998,13 @@ function submitReactivate(idx) {
   const programStart = document.getElementById('reactivate-program-start')?.value;
   const term = document.getElementById('reactivate-term')?.value;
   if (!programStart) return;
+  const before = contractSnapshot(client);
   client.status = 'active';
   client.health = '🆕 Onboarding';
   client.dates = client.dates || {};
   client.dates.program_start = programStart;
   if (term) client.contract = { ...client.contract, term };
+  logContractEdit(client, before, 'renew', 'Reactivated', programStart);
   client.renewal = { status: 'pending' };
   client.archive = {};
   saveClients(idx);
@@ -2490,6 +2393,7 @@ function openInlineDatePicker(td) {
     defaultDate: val || null,
     onClose(selectedDates, dateStr) {
       if (dateStr && dateStr !== val) {
+        const before = contractSnapshot(allClients[idx]);
         const parts = field.split('.');
         let obj = allClients[idx];
         for (let i = 0; i < parts.length - 1; i++) {
@@ -2497,6 +2401,7 @@ function openInlineDatePicker(td) {
           obj = obj[parts[i]];
         }
         obj[parts[parts.length - 1]] = dateStr;
+        logContractEdit(allClients[idx], before, 'edit', 'Program start edited in table');
         saveClients(idx);
         showToast('Date updated');
         render();
@@ -2513,7 +2418,6 @@ function openInlineDatePicker(td) {
 
 function renderActionItems() {
   const today       = getToday();
-  const weekFromNow = addDays(today, 7);
   const active      = allClients
     .map((c, i) => ({ ...c, _idx: i, _health: normaliseHealth(c.health) }))
     .filter(c => c.status === 'active')
@@ -2522,15 +2426,6 @@ function renderActionItems() {
   const attention  = active.filter(c => c._health === '🚩 Attention');
   const cruising   = active.filter(c => c._health === '🔸 Cruising');
   const renewalsDue = active.filter(c => renewalFlag(c, termToDays, bonusToDays));
-
-  const overdueReviews = [], weekReviews = [];
-  active.forEach(c => {
-    calculateReviews(c, termToDays, bonusToDays).forEach(r => {
-      if (r.completed) return;
-      if (r.date < today) overdueReviews.push({ c, r });
-      else if (r.date <= weekFromNow) weekReviews.push({ c, r });
-    });
-  });
 
   function clientRow(c, sub, sub2, clickFn) {
     const hc = GANTT_BAR_COLOR[c._health] || GANTT_DEFAULT_COLOR;
@@ -2571,34 +2466,13 @@ function renderActionItems() {
     ...cruising.map(c => clientRow(c, '→ send encouragement')),
   ].join('');
 
-  // Merged: Overdue reviews (top, with badge) + this week reviews (below divider)
-  const overdueRows  = overdueReviews.map(({c, r}) => {
-    const daysOver = Math.abs(Math.round((r.date - today) / 86400000));
-    return clientRow(c, `R${r.reviewNum} · <span class="text-rose-400">${daysOver}d overdue</span>`);
-  });
-  const weekRows = weekReviews.map(({c, r}) => {
-    const daysUntil = Math.round((r.date - today) / 86400000);
-    return clientRow(c, `R${r.reviewNum} · in ${daysUntil}d`);
-  });
-  const reviewRows = [
-    ...overdueRows,
-    ...(overdueReviews.length > 0 && weekReviews.length > 0 ? [
-      `<div class="border-t border-white/[0.06] my-2 pt-1">
-        <span class="text-[10px] font-semibold text-[#4a5568] uppercase tracking-widest font-mono">This Week</span>
-      </div>`
-    ] : []),
-    ...weekRows,
-  ].join('');
-  const totalReviews = overdueReviews.length + weekReviews.length;
-
   document.getElementById('actions-inner').innerHTML = `
     <div class="flex items-center gap-3 mb-5">
       <h2 class="text-base font-bold text-white">Action Items</h2>
       <span class="text-[12px] text-[#4a5568] font-mono">${getToday().toLocaleDateString('en-AU',{weekday:'short',day:'numeric',month:'short'})}</span>
     </div>
-    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       ${card('Needs Attention','🚩', attention.length + cruising.length, attentionRows, attention.length > 0)}
-      ${card('Reviews','📅', totalReviews, reviewRows, overdueReviews.length > 0)}
       ${card('Renewals Due','🔄',renewalsDue.length, renewalsDue.map(c=>{
         const rc=renewContact(c,termToDays,bonusToDays);
         const d=rc?Math.round((rc-today)/86400000):null;
@@ -2791,20 +2665,20 @@ async function parseDictation() {
   const today = todayISO();
 
   const healthOptions = schemaCache?.fields?.health?.options?.join(', ') || '"🆕 Onboarding", "✅ Momentum", "🔸 Cruising", "🚩 Attention", "⏸️ Pause"';
-  const termOptions = Object.keys(termToDays).join(', ') || '"12wks", "16wks", "6mth", "12mth"';
+  const termOptions = (schemaCache?.fields?.contract?.fields?.term?.options || []).join(', ') || '"12wks", "16wks", "6mth", "12mth", "M2M"';
 
   const prompt = `You are a coaching client management assistant. Parse the dictation below and extract NOTES and ACTIONS.
 
 CRITICAL RULE: ONLY create actions for EXPLICIT instructions to change client data.
 - Observations and sentiment are NOTES only (e.g. "Lee is crushing it" → NOTE, not a health change)
-- Only create actions when the user explicitly says "change to", "move to", "set to", "flag", "pause", "renew", "mark review", "new program date", or similar DIRECTIVE language
+- Only create actions when the user explicitly says "change to", "move to", "set to", "flag", "pause", "renew", "new program date", or similar DIRECTIVE language
 - If someone says a client "is doing great" or "needs work", that is a NOTE. They must explicitly instruct a change for it to become an ACTION.
 
 CLIENT LIST (only these names are valid):
 ${clientList}
 
 VALID HEALTH VALUES: ${healthOptions}
-VALID CONTRACT TERMS: ${termOptions}
+VALID CONTRACT TERMS: ${termOptions} (M2M = month-to-month)
 
 TODAY'S DATE: ${today}
 
@@ -2816,7 +2690,7 @@ Return ONLY valid JSON:
   "notes": [{"client": "exact name from list", "note": "the observation text"}],
   "actions": [
     {
-      "type": "health_change|flag|program_start|renewal|pause|review",
+      "type": "health_change|flag|program_start|renewal|pause",
       "client": "exact name from list",
       "params": {},
       "summary": "human-readable description"
@@ -2830,7 +2704,6 @@ PARAMS by type:
 - program_start: {"date": "YYYY-MM-DD or null if unclear"}
 - renewal: {"outcome": "renewed|churned|paused", "new_term": "term or null", "new_program_start": "YYYY-MM-DD or null", "notes": "string or null"}
 - pause: {"start_date": "YYYY-MM-DD or null", "end_date": "YYYY-MM-DD or null", "weeks": number or null, "reason": "string or null"}
-- review: {"review_number": 1-6, "notes": "string or null"}
 
 RULES:
 - Use EXACT name spelling from the client list. Match closest name even if abbreviated.
@@ -2879,9 +2752,6 @@ function computeMissingFields(type, params) {
       break;
     case 'pause':
       if (!params.weeks && (!params.start_date || !params.end_date)) missing.push('duration');
-      break;
-    case 'review':
-      if (!params.review_number) missing.push('review_number');
       break;
     case 'renewal':
       if (!params.outcome) missing.push('outcome');
@@ -3000,8 +2870,7 @@ function getActionTypeBadge(type) {
     flag: { label: '🚩 Flag', color: 'text-amber-400' },
     program_start: { label: '📅 Program', color: 'text-indigo-400' },
     renewal: { label: '🔄 Renewal', color: 'text-cyan-400' },
-    pause: { label: '⏸️ Pause', color: 'text-amber-400' },
-    review: { label: '📋 Review', color: 'text-violet-400' }
+    pause: { label: '⏸️ Pause', color: 'text-amber-400' }
   };
   return map[type] || { label: type, color: 'text-[#8892a8]' };
 }
@@ -3033,12 +2902,6 @@ function renderMissingFields(action, idx) {
       <option value="">Select outcome…</option><option value="renewed">Renewed</option><option value="churned">Churned</option><option value="paused">Paused</option>
     </select>`;
   }
-  if (action.type === 'review' && action.missingFields.includes('review_number')) {
-    html += `<select onchange="updateActionParam(${idx},'review_number',parseInt(this.value)||null)" class="${inputCls} w-full cursor-pointer">
-      <option value="">Select review…</option>${[1,2,3,4,5,6].map(n => `<option value="${n}">Review ${n}</option>`).join('')}
-    </select>`;
-  }
-
   html += '</div>';
   return html;
 }
@@ -3110,16 +2973,21 @@ function executeCommandCenter() {
         client.health = '🚩 Attention';
         client.flag_reason = a.params.reason || '';
         break;
-      case 'program_start':
+      case 'program_start': {
+        const before = contractSnapshot(client);
         client.dates = client.dates || {};
         client.dates.program_start = a.params.date;
+        logContractEdit(client, before, 'edit', 'Program start set from Command Center');
         break;
+      }
       case 'renewal': {
         if (client.renewal?.status !== 'pending') { skipped++; showToast(`${client.name}: renewal not pending`, 'info'); return; }
         client.renewal = { status: a.params.outcome, actioned_date: todayISO(), notes: null };
         if (a.params.outcome === 'renewed') {
+          const before = contractSnapshot(client);
           if (a.params.new_program_start) client.dates.program_start = a.params.new_program_start;
           if (a.params.new_term) client.contract = { ...client.contract, term: a.params.new_term };
+          logContractEdit(client, before, 'renew', 'Renewed from Command Center', a.params.new_program_start || todayISO());
         }
         if (a.params.notes) {
           if (!client.client_notes) client.client_notes = [];
@@ -3157,13 +3025,6 @@ function executeCommandCenter() {
           client.status = 'paused';
           client.health = '⏸️ Pause';
         }
-        break;
-      }
-      case 'review': {
-        const key = `review_${a.params.review_number}`;
-        client.reviews = client.reviews || {};
-        if (client.reviews[key]?.completed) { skipped++; showToast(`${client.name}: review ${a.params.review_number} already complete`, 'info'); return; }
-        client.reviews[key] = { ...(client.reviews[key] || {}), completed: true, completed_date: todayISO(), notes: a.params.notes || '' };
         break;
       }
     }
@@ -3297,6 +3158,52 @@ async function handleSignOut() {
   showLogin();
 }
 
+// ── Contract edits → contract_history ─────────────────────────────────────────
+// term, bonus_term, program_start and payment are rebuilt from contract_history
+// on every load (projectContractState), so a direct edit must also be logged as
+// an event — otherwise it silently reverts after a reload. Snapshot before the
+// edit, apply it, then call logContractEdit with the snapshot.
+
+function contractSnapshot(c) {
+  return {
+    term:          c.contract?.term       ?? null,
+    bonus_term:    c.contract?.bonus_term ?? null,
+    program_start: c.dates?.program_start ?? null,
+    payment: {
+      period:    c.payment?.period    ?? null,
+      amount:    c.payment?.amount    ?? null,
+      currency:  c.payment?.currency  ?? null,
+      gst:       c.payment?.gst       ?? null,
+      processor: c.payment?.processor ?? null,
+    },
+  };
+}
+
+function logContractEdit(c, before, eventType, notes = null, eventDate = todayISO()) {
+  const now = contractSnapshot(c);
+  const ev  = {};
+  if (now.term && now.term !== before.term)                            ev.term          = now.term;
+  if (now.bonus_term !== before.bonus_term)                            ev.bonus_term    = now.bonus_term;
+  if (now.program_start && now.program_start !== before.program_start) ev.program_start = now.program_start;
+  const payment = {};
+  for (const k of Object.keys(now.payment)) {
+    if (now.payment[k] !== null && now.payment[k] !== before.payment[k]) payment[k] = now.payment[k];
+  }
+  if (Object.keys(payment).length) ev.payment = payment;
+  if (Object.keys(ev).length === 0) return;
+
+  if (!c.contract_history) c.contract_history = [];
+  c.contract_history.push({
+    id:              crypto.randomUUID(),
+    event_date:      eventDate,
+    logged_at:       new Date().toISOString(),
+    event_type:      eventType,
+    ...ev,
+    notes,
+    manual_override: eventDate !== todayISO(),
+  });
+}
+
 // ── Contract history migration ────────────────────────────────────────────────
 // One-time migration: any client without contract_history gets a synthetic 'sign'
 // event built from their existing contract/payment/dates. Saved immediately so
@@ -3401,9 +3308,10 @@ async function init() {
     });
     const termSelect = document.getElementById('filter-term');
     termSelect.innerHTML = '<option value="">All terms</option>';
-    (schema.fields.contract.fields.term.options || []).forEach(o => {
+    const termDef = schema.fields.contract.fields.term;
+    (termDef.options || []).forEach(o => {
       const opt = document.createElement('option');
-      opt.value = o; opt.textContent = o;
+      opt.value = o; opt.textContent = optionLabel(termDef, o);
       termSelect.appendChild(opt);
     });
 

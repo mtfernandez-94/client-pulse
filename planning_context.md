@@ -14,13 +14,14 @@ This file captures the key decisions from the planning conversation so Claude Co
 - **Schema-driven design**: schema.json is the single source of truth. Adding a field to the schema should automatically update the UI. This was the student's #1 requirement — "everything should be tweakable without anything breaking."
 - **Supabase backend**: PostgreSQL database with Row Level Security. Auth via email/password. Data filtered by `coach_id = auth.uid()`. Replaced original localStorage approach.
 - **Deployed**: GitHub Pages at `pulse.whytbelt.com` (custom domain via GoDaddy CNAME → `mtfernandez-94.github.io`). Auto-deploys on push to `main`.
-- **Modular code**: each feature in its own file. Date engine, pause system, reviews, gantt, supabase — all independent.
+- **Modular code**: each feature in its own file. Date engine, pause system, gantt, supabase — all independent.
 
 ### Data decisions
 - **Two date fields**: client_start (never changes, tracks when they first signed up) and program_start (resets each term). The spreadsheet only had one date, which broke renewal tracking.
-- **Review completion**: reviews must be markable as done so flags clear. The spreadsheet couldn't do this — overdue reviews stayed flagged forever.
+- ~~**Review completion**: reviews must be markable as done so flags clear. The spreadsheet couldn't do this — overdue reviews stayed flagged forever.~~ ✗ **removed** · 2026-10-16 — the whole review feature (dates, flags, completion, data) was taken out; renewals are the only tracked check-in.
 - **Renewal outcomes**: renewals tracked as pending → actioned (renewed/churned/paused). Not just a date flag.
 - **Pause history**: full log of when, how long, why — not just a number.
+- **Month-to-month term** (2026-10-16): term `M2M` rolls monthly with no fixed end — no end of commitment, no renewal contact, never flagged. Gantt draws it as a dashed bar running off the right edge. Switching between M2M and a fixed term (Update Terms) restarts `program_start` on the effective date, like a renewal.
 
 ### Teaching approach
 - Pause after each concept, quiz the student, hold them to a high bar
@@ -48,7 +49,7 @@ This file captures the key decisions from the planning conversation so Claude Co
 - **Payment processor column:** Added as "Processor" column (schema-driven; sortable).
 
 ## Sprint 7–8 notes (for teaching)
-- **Gantt:** Custom CSS timeline (no external library). Table/Gantt toggle; bars colour-coded by health; today line; markers for renew contact and reviews; click bar opens client.
+- **Gantt:** Custom CSS timeline (no external library). Table/Gantt toggle; bars colour-coded by health; today line; markers for renew contact; month-to-month as dashed open-ended bars; click bar opens client.
 - **Archive/Reactivate:** Archive = status → archived (data preserved). Reactivate = new program_start (+ optional term) → status active, health Onboarding, renewal pending.
 - **MCP (conceptual):** Standard protocol to connect external tools (e.g. Stripe, EverFit). Would enable payment verification or programme delivery sync without building custom integrations.
 

@@ -11,8 +11,7 @@
     { "key": "payment.period",         "label": "Period",              "cell_type": "text",         "sortable": true,  "sort_key": "paymentPeriod" },
     { "key": "dates.program_start",    "label": "Program Start",      "cell_type": "date",         "sortable": true,  "sort_key": "programStart" },
     { "key": "calc.end_of_commitment", "label": "End of Commitment",  "cell_type": "calc_date",    "sortable": true,  "sort_key": "endDate" },
-    { "key": "calc.renew_contact",     "label": "Renew Contact",      "cell_type": "renewal_flag", "sortable": true,  "sort_key": "renewalUrgency" },
-    { "key": "calc.next_review",       "label": "Next Review",        "cell_type": "review_flag",  "sortable": true,  "sort_key": "nextReview" }
+    { "key": "calc.renew_contact",     "label": "Renew Contact",      "cell_type": "renewal_flag", "sortable": true,  "sort_key": "renewalUrgency" }
   ],
   "fields": {
     "name": {
@@ -89,15 +88,17 @@
         "term": {
           "type": "enum",
           "required": true,
-          "options": ["12wks", "16wks", "6mth", "12mth"],
-          "label": "Contract Term"
+          "options": ["12wks", "16wks", "6mth", "12mth", "M2M"],
+          "labels": { "M2M": "Month-to-month" },
+          "label": "Contract Term",
+          "note": "Month-to-month rolls with no fixed end date (no renewal contact)"
         },
         "bonus_term": {
           "type": "enum",
           "required": false,
           "options": ["1mth", "2mth"],
           "label": "Bonus Term",
-          "note": "1mth = 30 days, 2mth = 61 days"
+          "note": "1mth = 30 days, 2mth = 61 days. Ignored on month-to-month."
         }
       }
     },
@@ -127,37 +128,19 @@
         }
       },
       "calculated": {
-        "end_of_commitment": "program_start + contract_term_days + bonus_term_days + (weeks_paused * 7)",
-        "renew_contact": "end_of_commitment - 37 days",
-        "review_1": "program_start + 49 days + (weeks_paused * 7) — only if before end_of_commitment",
-        "review_2": "program_start + 105 days + (weeks_paused * 7)",
-        "review_3": "program_start + 161 days + (weeks_paused * 7)",
-        "review_4": "program_start + 217 days + (weeks_paused * 7)",
-        "review_5": "program_start + 273 days + (weeks_paused * 7)",
-        "review_6": "program_start + 329 days + (weeks_paused * 7)"
+        "end_of_commitment": "program_start + contract_term_days + bonus_term_days + (weeks_paused * 7) — none for rolling terms (term_to_days = null, e.g. M2M)",
+        "renew_contact": "end_of_commitment - 37 days — none for rolling terms"
       },
       "term_to_days": {
         "12wks": 84,
         "16wks": 112,
         "6mth": 182,
-        "12mth": 365
+        "12mth": 365,
+        "M2M": null
       },
       "bonus_to_days": {
         "1mth": 30,
         "2mth": 61
-      }
-    },
-    "reviews": {
-      "type": "object",
-      "label": "Review Tracking",
-      "note": "Each review has a calculated date and a completed flag with timestamp",
-      "fields": {
-        "review_N": {
-          "date": "calculated from dates.calculated",
-          "completed": "boolean, default false",
-          "completed_date": "date or null",
-          "notes": "string or null"
-        }
       }
     },
     "renewal": {
@@ -209,8 +192,8 @@
         "id": "uuid",
         "event_date": "ISO date — when this event takes effect",
         "logged_at": "ISO timestamp — when recorded",
-        "event_type": "enum: sign | renew | rate_change | payment_change | term_extension",
-        "term": "12wks|16wks|6mth|12mth — omit if unchanged",
+        "event_type": "enum: sign | renew | rate_change | payment_change | term_extension | edit (direct correction from the client modal / table / Command Center)",
+        "term": "12wks|16wks|6mth|12mth|M2M — omit if unchanged",
         "bonus_term": "1mth|2mth|null — null explicitly clears bonus; omit if unchanged",
         "program_start": "ISO date — omit if unchanged",
         "payment": {

@@ -2,7 +2,7 @@
 
 ## What This Workspace Is
 
-Client Pulse is a live web dashboard for managing online calisthenics coaching clients — tracking health, contracts, renewals, reviews, and timelines via a Gantt chart. It feeds directly from the coaching business (clients onboard → managed here) and replaces a broken Google Sheets workflow. Output is a clear, actionable view of which clients need attention right now.
+Client Pulse is a live web dashboard for managing online calisthenics coaching clients — tracking health, contracts, renewals, and timelines via a Gantt chart. It feeds directly from the coaching business (clients onboard → managed here) and replaces a broken Google Sheets workflow. Output is a clear, actionable view of which clients need attention right now.
 
 **Stack:** Vanilla HTML/JS + Tailwind CDN · Supabase (PostgreSQL + Auth) · GitHub Pages · No build step  
 **Live:** `pulse.whytbelt.com` → GitHub Pages auto-deploy on push to `main`
@@ -43,10 +43,12 @@ client-pulse/
 ├── schema.json             ← SINGLE SOURCE OF TRUTH: columns, fields, enums, term lookups
 ├── clients_seed.json       ← Seed/backup data (17KB, 17 clients)
 ├── settings_reference.json ← Reference for .claude/settings.json permissions
+├── remove-reviews-migration.sql ← Drops the old `reviews` column (run after deploy)
 │
 ├── CNAME                   ← Custom domain (pulse.whytbelt.com)
 ├── .nojekyll               ← GitHub Pages static site flag
 ├── favicon.svg
+├── keepalive/              ← Supabase keep-alive (own private repo, git-ignored here)
 ├── .claude/                ← Claude Code permissions and launch config
 └── .cursor/                ← Cursor hooks (session-start, format validation)
 ```
@@ -82,7 +84,13 @@ User opens pulse.whytbelt.com
 
 ### Calculated fields rule
 
-`end_of_commitment`, `renew_contact`, and all `review_N` dates are **never stored in the DB** — always calculated live from `program_start + term + bonus_term + weeks_paused`.
+`end_of_commitment` and `renew_contact` are **never stored in the DB** — always calculated live from `program_start + term + bonus_term + weeks_paused`.
+
+### Month-to-month terms
+
+Term `M2M` is rolling: `term_to_days` maps it to `null`, which `isRollingTerm()` reads. Rolling clients have no end of commitment and no renewal contact (never flagged). The Gantt draws them as a dashed bar that runs off the right edge and fades out; archived ones stop at program end / archive date. Switching between M2M and a fixed term in Update Terms restarts `program_start` on the effective date.
+
+Reviews were removed on 2026-10-16. `reviews` is no longer read or written, and `remove-reviews-migration.sql` drops the column. Run it only after the new app version is deployed.
 
 ### Status is system-managed
 
@@ -93,6 +101,10 @@ User opens pulse.whytbelt.com
 ```
 git push origin main  →  GitHub Pages builds & deploys (~1 min)
 ```
+
+### Supabase keep-alive
+
+Free-plan Supabase pauses after 7 days of low activity. A GitHub Action in the private repo `mtfernandez-94/client-pulse-keepalive` (local copy: `keepalive/`) runs every 5 days and makes 3 read-only `select id … limit 1` queries with the public anon key — RLS returns 0 rows, so no client data is read or changed. Failure emails the repo owner; a 540/503 means the project is already paused (resume in the Supabase dashboard). Lives in its own private repo because GitHub disables scheduled workflows in public repos after 60 days without a push. Details: `keepalive/README.md`.
 
 ---
 
@@ -120,7 +132,9 @@ git push origin main  →  GitHub Pages builds & deploys (~1 min)
 ## What NOT to Do
 
 - **Don't hardcode enum values** in app.js — they live in `schema.json`
-- **Don't store `end_of_commitment`, `renew_contact`, or `review_N` dates** in Supabase — calculated fields only
+- **Don't store `end_of_commitment` or `renew_contact`** in Supabase — calculated fields only
+- **Don't hardcode `'M2M'`** — check `isRollingTerm()` (driven by `term_to_days: null`)
+- **Don't write term / bonus / program_start / payment directly** without logging it — they're rebuilt from `contract_history` on load. Snapshot with `contractSnapshot()`, apply, then `logContractEdit()`
 - **Don't add `status` transitions** outside of Pause / Resume / Archive / Reactivate / Add
 - **Don't call Supabase SDK** directly from app.js — always through `supabase.js`
 - **Don't change script load order** in index.html — `app.js` must be last

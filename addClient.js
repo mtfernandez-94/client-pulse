@@ -25,7 +25,7 @@ function buildField(id, def) {
       const defaultOpt = def.required
         ? `<option value="" disabled selected>Select…</option>`
         : `<option value="">None</option>`;
-      const opts = (def.options || []).map(o => `<option value="${o}">${o}</option>`).join('');
+      const opts = (def.options || []).map(o => `<option value="${o}">${def.labels?.[o] ?? o}</option>`).join('');
       input = `<select id="${id}" class="${inputCls}">${defaultOpt}${opts}</select>`;
       break;
     }
@@ -188,7 +188,6 @@ async function submitNewClient() {
       weeks_paused:  0,
     },
     renewal:       { status: 'pending' },
-    reviews:       {},
     pause_history: [],
     contract_history: [{
       id:             crypto.randomUUID(),

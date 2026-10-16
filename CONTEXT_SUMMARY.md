@@ -63,15 +63,19 @@
 - Export CSV
 - JSON backup export + import (prevents future data loss)
 
+### 2026-10-16 — Reviews removed, month-to-month added
+- **Reviews removed entirely:** Next Review column, Reviews Due KPI, review modal, edit-modal Reviews section, Actions "Reviews" card, Gantt review dots, command-center `review` action, `reviews` field in schema/supabase.js/seed. DB column dropped via `remove-reviews-migration.sql` (run after deploy).
+- **Month-to-month term (`M2M`):** `term_to_days.M2M = null` marks a rolling term → `isRollingTerm()`; no end of commitment / renewal contact. Table shows "↻ Rolling"; Gantt draws a dashed bar to the right edge that fades out (archived M2M stops at program end / archive date). Dropdowns show "Month-to-month" via schema `labels`.
+- **Missing-data warning** moved from the review column to Renew Contact (`diagnoseMissingDates()`).
+- **Fix — contract edits no longer revert on reload:** term/bonus/program_start/payment are rebuilt from `contract_history` on every load, but the edit modal, reactivate, inline program-start edit and Command Center program_start/renewal wrote them directly. They now log an event via `contractSnapshot()` + `logContractEdit()` (`edit` or `renew`).
+
 ---
 
 ## 3. Next Steps (Prioritised)
 
-### 1. Clickable Review Flags
-- Reviews: currently "Mark complete" in edit modal only
-- **Goal:** Make overdue/upcoming reviews clickable in the table (like Renew Contact), open a dedicated "Complete review" modal
+### ~~1. Clickable Review Flags~~ ✗ **dropped** · 2026-10-16 — review feature removed
 
-### 2. Supabase RLS Verification
+### 2. Supabase RLS Verification ← **NEXT**
 - Verify RLS policy on `clients` table uses `coach_id = auth.uid()`
 - App-level filter added as defense-in-depth, but RLS is the real security layer
 
@@ -91,7 +95,7 @@
 | **addClient.js** | Add-client modal, validation, submit | Add-client flow only |
 | **dateEngine.js** | Pure date calculations | Read for date logic; don't hardcode term/bonus days |
 | **supabase.js** | Supabase client, auth, CRUD operations | All DB reads/writes go through here |
-| **gantt.js** | Gantt timeline rendering | Health-colored bars, review/renewal markers |
+| **gantt.js** | Gantt timeline rendering | Health-colored bars, renewal markers, dashed open-ended month-to-month bars |
 | **clients_seed.json** | Backup seed data | Used as fallback import when Supabase is empty |
 
 ### Data Flow
@@ -102,7 +106,7 @@ schema.json ──► tableColumns, termToDays, bonusToDays
 Supabase (clients table) ──► sbLoadClients(coachId) ──► allClients[]
                     │
                     ▼
-              dateEngine.js (endOfCommitment, renewContact, calculateReviews, nextReview)
+              dateEngine.js (endOfCommitment, renewContact, isRollingTerm, renewalFlag)
                     │
                     ▼
               app.js: getVisible(), render(), renderCell(), modals
@@ -113,7 +117,7 @@ Supabase (clients table) ──► sbLoadClients(coachId) ──► allClients[]
 1. **Schema-first:** Add `table_columns` entry → column appears. Add enum option → dropdown updates.
 2. **Status:** `active` | `paused` | `archived` — only changed via Pause/Resume, Archive/Reactivate.
 3. **Health:** Auto "🆕 Onboarding" on add; editable inline; on resume, restored from `pause_history.health_before_pause`.
-4. **Calculated fields:** `calc.end_of_commitment`, `calc.renew_contact`, `calc.next_review` — dispatched in `getCalc()` in app.js, call dateEngine with `termToDays`, `bonusToDays`.
+4. **Calculated fields:** `calc.end_of_commitment`, `calc.renew_contact` — dispatched in `getCalc()` in app.js, call dateEngine with `termToDays`, `bonusToDays`. Both are null for rolling (month-to-month) terms.
 5. **Modals:** All use `#add-client-modal`; `modal.innerHTML = ...` replaces content. `closeModal()` clears and hides.
 6. **Auth:** Supabase email/password. Session checked on init. coach_id = user.id.
 7. **Backup:** JSON export/import in header. Export strips Supabase IDs; import seeds via `sbSeedClients()`.
@@ -142,9 +146,8 @@ filterStatus, filterHealth, filterTerm, sortCol, sortDir, viewMode
 - `status_badge` — read-only badge
 - `text`, `date` — display
 - `payment` — custom payment cell
-- `calc_date` — from getCalc
-- `renewal_flag` — clickable when pending, opens renewal modal
-- `review_flag` — display only (backlog: make clickable like renewals)
+- `calc_date` — from getCalc; "↻ Rolling" for month-to-month
+- `renewal_flag` — clickable when pending, opens renewal modal; "⚠ Missing data" when dates can't be calculated
 
 ---
 
@@ -169,7 +172,7 @@ filterStatus, filterHealth, filterTerm, sortCol, sortDir, viewMode
 |------|------|-------|
 | Add table column | schema.json | `table_columns` array |
 | Add form field | schema.json | `fields` object |
-| Change date calc | dateEngine.js | `endOfCommitment`, `renewContact`, `calculateReviews` |
+| Change date calc | dateEngine.js | `endOfCommitment`, `renewContact`, `isRollingTerm` |
 | Add modal | app.js | `modal.innerHTML = ...` pattern; use `#add-client-modal` |
 | Add filter | app.js | `getVisible()`, `setupEvents()`, filter UI in index.html |
 | Add sort | app.js | `getVisible()` switch, `table_columns` `sort_key` |

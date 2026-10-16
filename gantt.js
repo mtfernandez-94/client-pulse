@@ -3,8 +3,13 @@
 // ── gantt.js ──────────────────────────────────────────────────────────────────
 // ClickUp-style Gantt chart with scrollable timeline, zoom, and hover tooltips.
 // Reads from globals: allClients, termToDays, bonusToDays, schemaCache, getToday()
-// Calls: getVisible(), endOfCommitment(), renewContact(), calculateReviews(),
-//        parseDate(), daysDiff(), fmt(), openEditModal()
+// Calls: getVisible(), endOfCommitment(), renewContact(), isRollingTerm(),
+//        parseDate(), addDays(), daysDiff(), fmt(), openEditModal()
+//
+// Fixed terms draw a solid pill from program start to end of commitment.
+// Month-to-month (rolling) terms draw a dashed bar that runs off the right
+// edge and fades out — no end, no renewal dot. Archived rolling clients stop
+// at their program end / archive date.
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -163,34 +168,61 @@ function buildTodayLine(rangeStart, pxPerDay, totalH) {
 
 // ── Client rows ───────────────────────────────────────────────────────────────
 
+// Month-to-month bar end: open (chart's right edge) while the client is on
+// the books; archived clients stop at program end, else archive date, else today.
+function rollingBarEnd(c, rangeEnd) {
+  if (c.status !== 'archived') return { end: rangeEnd, open: true };
+  const end = parseDate(c.archive?.program_end_date) || parseDate(c.archive?.archived_at) || getToday();
+  return { end, open: false };
+}
+
 function buildClientRow(c, i, rangeStart, rangeDays, pxPerDay) {
   const y = i * GANTT_ROW_H;
   const start = parseDate(c.dates?.program_start);
-  const eoc = endOfCommitment(c, termToDays, bonusToDays);
-  const rc = renewContact(c, termToDays, bonusToDays);
-  const reviews = calculateReviews(c, termToDays, bonusToDays).filter(r => !r.completed);
+  const rolling = isRollingTerm(c, termToDays);
+  const { end, open } = rolling
+    ? rollingBarEnd(c, addDays(rangeStart, rangeDays))
+    : { end: endOfCommitment(c, termToDays, bonusToDays), open: false };
+  const rc = rolling ? null : renewContact(c, termToDays, bonusToDays);
   const health = normaliseHealth(c.health);
   const colors = GANTT_BAR_COLOR[health] || GANTT_DEFAULT_COLOR;
 
-  if (!start || !eoc) {
+  if (!start || !end) {
     return `<div class="absolute flex items-center" style="left:0;top:${y}px;height:${GANTT_ROW_H}px;width:100%;">
       <div class="text-[12px] text-[#334155] pl-2 font-mono">No dates</div>
     </div>`;
   }
 
   const startOffset = daysDiff(rangeStart, start);
-  const duration = daysDiff(start, eoc);
+  const duration = daysDiff(start, end);
   const barLeft = startOffset * pxPerDay;
   const barWidth = Math.max(duration * pxPerDay, 4);
+  const barTop = y + (GANTT_ROW_H - GANTT_BAR_H) / 2;
 
-  // Bar with 3D depth
-  let html = `
-    <div class="gantt-bar absolute flex items-center cursor-pointer group" style="left:${barLeft}px;top:${y + (GANTT_ROW_H - GANTT_BAR_H) / 2}px;width:${barWidth}px;height:${GANTT_BAR_H}px;" onclick="openEditModal(${c._idx})">
-      <div class="gantt-tooltip">Ends: ${fmt(eoc)}</div>
-      <div class="w-full h-full rounded-full relative overflow-visible" style="background:linear-gradient(180deg, ${colors.bg}, ${colors.bg}dd);border:1.5px solid ${colors.border};box-shadow:0 0 8px ${colors.border}33, 0 2px 4px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.05);">
-        <span class="absolute inset-0 flex items-center px-3 text-[11px] font-semibold truncate font-mono" style="color:${colors.text};">${barWidth > 60 ? c.name : ''}</span>
-      </div>
-    </div>`;
+  let html;
+  if (rolling) {
+    // Dashed, lighter fill; open bars lose their right cap and fade out.
+    const tooltip = open ? `Month-to-month · rolling since ${fmt(start)}` : `Month-to-month · ended ${fmt(end)}`;
+    const shape   = open
+      ? 'border-radius:9999px 0 0 9999px;border-right:none;-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 96px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 96px),transparent);'
+      : 'border-radius:9999px;';
+    html = `
+      <div class="gantt-bar absolute flex items-center cursor-pointer group" style="left:${barLeft}px;top:${barTop}px;width:${barWidth}px;height:${GANTT_BAR_H}px;" onclick="openEditModal(${c._idx})">
+        <div class="gantt-tooltip" style="left:${Math.min(barWidth / 2, 90)}px;">${tooltip}</div>
+        <div class="w-full h-full relative" style="background:linear-gradient(180deg, ${colors.bg}aa, ${colors.bg}66);border:1.5px dashed ${colors.border};${shape}">
+          <span class="absolute inset-0 flex items-center px-3 text-[11px] font-semibold truncate font-mono" style="color:${colors.text};">${barWidth > 60 ? `${c.name}<span class="ml-2 opacity-60 font-normal">↻ M2M</span>` : ''}</span>
+        </div>
+      </div>`;
+  } else {
+    // Bar with 3D depth
+    html = `
+      <div class="gantt-bar absolute flex items-center cursor-pointer group" style="left:${barLeft}px;top:${barTop}px;width:${barWidth}px;height:${GANTT_BAR_H}px;" onclick="openEditModal(${c._idx})">
+        <div class="gantt-tooltip">Ends: ${fmt(end)}</div>
+        <div class="w-full h-full rounded-full relative overflow-visible" style="background:linear-gradient(180deg, ${colors.bg}, ${colors.bg}dd);border:1.5px solid ${colors.border};box-shadow:0 0 8px ${colors.border}33, 0 2px 4px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.05);">
+          <span class="absolute inset-0 flex items-center px-3 text-[11px] font-semibold truncate font-mono" style="color:${colors.text};">${barWidth > 60 ? c.name : ''}</span>
+        </div>
+      </div>`;
+  }
 
   // Renewal dot
   if (rc && rc >= rangeStart) {
@@ -203,20 +235,6 @@ function buildClientRow(c, i, rangeStart, rangeDays, pxPerDay) {
         <div class="gantt-tooltip">Renewal: ${rcDate}</div>
       </div>`;
   }
-
-  // Review dots
-  reviews.forEach(r => {
-    if (r.date >= rangeStart) {
-      const rOffset = daysDiff(rangeStart, r.date);
-      const rLeft = rOffset * pxPerDay;
-      const rDate = fmt(r.date);
-      html += `
-        <div class="gantt-dot absolute z-20" style="left:${rLeft - 4}px;top:${y + GANTT_ROW_H / 2 - 4}px;">
-          <div class="w-[8px] h-[8px] rounded-full bg-indigo-400 border-2 border-indigo-500 cursor-default" style="box-shadow:0 0 8px rgba(129,140,248,0.5), 0 1px 3px rgba(0,0,0,0.3);"></div>
-          <div class="gantt-tooltip">Review ${r.reviewNum}: ${rDate}</div>
-        </div>`;
-    }
-  });
 
   return html;
 }
@@ -314,7 +332,7 @@ function renderGantt() {
       <span class="ml-1">Zoom (or <kbd class="px-1.5 py-0.5 bg-white/[0.04] rounded text-[10px] font-mono border border-white/[0.06]" style="box-shadow:0 1px 2px rgba(0,0,0,0.2),inset 0 1px 0 rgba(255,255,255,0.05);">+</kbd> <kbd class="px-1.5 py-0.5 bg-white/[0.04] rounded text-[10px] font-mono border border-white/[0.06]" style="box-shadow:0 1px 2px rgba(0,0,0,0.2),inset 0 1px 0 rgba(255,255,255,0.05);">−</kbd> keys)</span>
       <span class="ml-3">
         <span class="inline-block w-2 h-2 rounded-full bg-amber-400 mr-1 align-middle" style="box-shadow:0 0 6px rgba(251,191,36,0.5);"></span>Renewal
-        <span class="inline-block w-2 h-2 rounded-full bg-indigo-400 mr-1 ml-3 align-middle" style="box-shadow:0 0 6px rgba(129,140,248,0.5);"></span>Review
+        <span class="inline-block w-5 h-2.5 mr-1 ml-3 align-middle" style="border:1.5px dashed #8892a8;border-right:none;border-radius:9999px 0 0 9999px;-webkit-mask-image:linear-gradient(90deg,#000 40%,transparent);mask-image:linear-gradient(90deg,#000 40%,transparent);"></span>Month-to-month
         <span class="inline-block w-3 h-px bg-indigo-400 mr-1 ml-3 align-middle"></span>Today
       </span>
     </div>`;
