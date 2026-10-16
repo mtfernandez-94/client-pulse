@@ -68,6 +68,7 @@
 - **Month-to-month term (`M2M`):** `term_to_days.M2M = null` marks a rolling term → `isRollingTerm()`; no end of commitment / renewal contact. Table shows "↻ Rolling"; Gantt draws a dashed bar to the right edge that fades out (archived M2M stops at program end / archive date). Dropdowns show "Month-to-month" via schema `labels`.
 - **Missing-data warning** moved from the review column to Renew Contact (`diagnoseMissingDates()`).
 - **Fix — contract edits no longer revert on reload:** term/bonus/program_start/payment are rebuilt from `contract_history` on every load, but the edit modal, reactivate, inline program-start edit and Command Center program_start/renewal wrote them directly. They now log an event via `contractSnapshot()` + `logContractEdit()` (`edit` or `renew`).
+- **Password reset:** "Forgot password?" on the login screen and "Forgot it?" in Change Password email a reset link (`sbSendPasswordReset`, redirect = site origin). Arriving via the link sets recovery mode (`type=recovery` hash / `PASSWORD_RECOVERY` event → `sbInRecovery()`), which opens "Set a New Password" without asking for the old one.
 
 ---
 

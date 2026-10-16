@@ -2230,7 +2230,10 @@ function submitBackfill() {
 
 // ── Toast notifications ────────────────────────────────────────────────────────
 
+// In recovery mode (arrived via a password-reset link) the current password
+// isn't asked for — the emailed link already proved who the user is.
 function showChangePasswordModal() {
+  const recovery = sbInRecovery();
   const inputCls = 'input-dark w-full bg-[#0a0d13] border border-white/[0.08] rounded-lg px-3 py-2.5 text-[13px] text-[#e2e8f0] focus:outline-none transition-all placeholder-[#4a5568]';
   const modal = document.getElementById('add-client-modal');
   modal.classList.remove('hidden');
@@ -2239,14 +2242,17 @@ function showChangePasswordModal() {
     <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div class="modal-panel rounded-2xl w-full max-w-sm border border-white/[0.06]">
         <div class="px-6 pt-6 pb-4 flex items-center justify-between">
-          <h2 class="text-base font-semibold text-white">Change Password</h2>
+          <h2 class="text-base font-semibold text-white">${recovery ? 'Set a New Password' : 'Change Password'}</h2>
           <button onclick="closeModal()" class="text-[#4a5568] hover:text-[#8892a8] transition-colors text-lg leading-none">&times;</button>
         </div>
         <div class="px-6 pb-6 space-y-4">
+          ${recovery ? `
+          <p class="text-[12px] text-[#8892a8]">You opened a password reset link — choose a new password.</p>` : `
           <div>
             <label class="block text-[12px] font-medium text-[#64748b] mb-1">Current Password</label>
             <input type="password" id="cp-current-password" class="${inputCls}" placeholder="Your current password" autocomplete="current-password">
-          </div>
+            <button type="button" onclick="sendResetFromChangePassword()" class="mt-1.5 text-[11px] text-indigo-400 hover:underline">Forgot it? Email me a reset link</button>
+          </div>`}
           <div>
             <label class="block text-[12px] font-medium text-[#64748b] mb-1">New Password</label>
             <input type="password" id="cp-new-password" class="${inputCls}" placeholder="Min. 6 characters" autocomplete="new-password">
@@ -2266,12 +2272,13 @@ function showChangePasswordModal() {
 }
 
 async function submitChangePassword() {
+  const recovery = sbInRecovery();
   const currPw = document.getElementById('cp-current-password')?.value || '';
   const newPw  = document.getElementById('cp-new-password')?.value || '';
   const confPw = document.getElementById('cp-confirm-password')?.value || '';
   const errorEl = document.getElementById('cp-error');
   errorEl.classList.add('hidden');
-  if (!currPw) {
+  if (!recovery && !currPw) {
     errorEl.textContent = 'Please enter your current password.';
     errorEl.classList.remove('hidden');
     return;
@@ -2287,13 +2294,29 @@ async function submitChangePassword() {
     return;
   }
   try {
-    const session = await sbGetSession();
-    await sbSignIn(session.user.email, currPw);
+    if (!recovery) {
+      const session = await sbGetSession();
+      await sbSignIn(session.user.email, currPw);
+    }
     await sbUpdatePassword(newPw);
+    sbEndRecovery();
     closeModal();
     showToast('Password updated');
   } catch (err) {
     errorEl.textContent = err.message || 'Failed to update password.';
+    errorEl.classList.remove('hidden');
+  }
+}
+
+async function sendResetFromChangePassword() {
+  const errorEl = document.getElementById('cp-error');
+  try {
+    const session = await sbGetSession();
+    await sbSendPasswordReset(session.user.email);
+    closeModal();
+    showToast(`Reset link sent to ${session.user.email} — open it to set a new password`, 'success', 6000);
+  } catch (err) {
+    errorEl.textContent = err.message || 'Could not send reset link.';
     errorEl.classList.remove('hidden');
   }
 }
@@ -3088,9 +3111,30 @@ function showApp() {
 function setupAuthEvents() {
   document.getElementById('btn-sign-in')?.addEventListener('click', handleSignIn);
   document.getElementById('btn-sign-up')?.addEventListener('click', handleSignUp);
+  document.getElementById('btn-forgot-password')?.addEventListener('click', handleForgotPassword);
   document.getElementById('auth-password')?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') handleSignIn();
   });
+}
+
+async function handleForgotPassword() {
+  const email   = document.getElementById('auth-email')?.value?.trim();
+  const errorEl = document.getElementById('auth-error');
+  errorEl.classList.remove('hidden', 'text-emerald-400');
+  errorEl.classList.add('text-red-400');
+
+  if (!email) {
+    errorEl.textContent = 'Enter your email above, then click "Forgot password?"';
+    return;
+  }
+  try {
+    await sbSendPasswordReset(email);
+    errorEl.textContent = `If ${email} has an account, a reset link is on its way. Open it to set a new password.`;
+    errorEl.classList.remove('text-red-400');
+    errorEl.classList.add('text-emerald-400');
+  } catch (e) {
+    errorEl.textContent = e.message || 'Could not send reset link';
+  }
 }
 
 async function handleSignIn() {
@@ -3323,6 +3367,8 @@ async function init() {
     renderStats();
     setupEvents();
     render();
+    // Arrived via a password-reset link → go straight to setting a new password
+    if (sbInRecovery()) showChangePasswordModal();
     // Initial backup on session start
     setTimeout(autoBackup, 3000);
   } catch (e) {

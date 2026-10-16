@@ -6,8 +6,14 @@
 const SUPABASE_URL = 'https://ndwfoggnabcospyhpxai.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_ADqC4q0uwaJPXroIwIvJkg_fDFxwaOv';
 
+// A password-reset link lands on the app with type=recovery in the URL hash.
+// Capture it before createClient, which consumes and clears the hash; the
+// PASSWORD_RECOVERY event below covers any flow that doesn't use the hash.
+let sbRecovery = /(?:^#|&)type=recovery(?:&|$)/.test(window.location.hash);
+
 // Initialise Supabase client (supabase-js loaded via CDN in index.html)
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+sb.auth.onAuthStateChange(event => { if (event === 'PASSWORD_RECOVERY') sbRecovery = true; });
 
 // ── Auth Functions ────────────────────────────────────────────────────────
 
@@ -30,6 +36,17 @@ async function sbSignOut() {
 
 async function sbUpdatePassword(newPassword) {
   const { error } = await sb.auth.updateUser({ password: newPassword });
+  if (error) throw error;
+}
+
+// True while signed in through a password-reset link: the user can set a new
+// password without knowing the old one. Cleared once the password is changed.
+function sbInRecovery() { return sbRecovery; }
+function sbEndRecovery() { sbRecovery = false; }
+
+// Emails a reset link that brings the user back to this site in recovery mode.
+async function sbSendPasswordReset(email) {
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
   if (error) throw error;
 }
 
