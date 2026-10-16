@@ -7,6 +7,7 @@ let tableColumns = [];   // from schema.json
 let termToDays   = {};   // from schema.json — e.g. { '12wks': 84, '16wks': 112, ... }
 let bonusToDays  = {};   // from schema.json — e.g. { '1mth': 30, '2mth': 61 }
 let schemaCache  = null; // full schema object, used by addClient modal
+let activeCoachId = null; // whose clients we load/save — the coach's id, also for a VA (sbResolveCoachId)
 let filterStatus = 'active';
 let filterHealth = '';
 let filterTerm   = '';
@@ -641,9 +642,8 @@ function importBackupJSON() {
         alert('No clients found in backup file.'); return;
       }
       if (!confirm(`Import ${clients.length} clients from backup? This will add them to your account.`)) return;
-      const session = await sbGetSession();
-      if (!session) { alert('Not signed in.'); return; }
-      const imported = await sbSeedClients(clients, session.user.id);
+      if (!activeCoachId) { alert('Not signed in.'); return; }
+      const imported = await sbSeedClients(clients, activeCoachId);
       allClients = allClients.concat(imported);
       render();
       renderStats();
@@ -836,12 +836,10 @@ async function _flushSave() {
   const indices = [..._saveQueue];
   _saveQueue.clear();
   try {
-    const session = await sbGetSession();
-    if (!session) return;
-    const coachId = session.user.id;
+    if (!activeCoachId) return;
     for (const i of indices) {
       const client = allClients[i];
-      if (client && client.id) await sbSaveClient(client, coachId);
+      if (client && client.id) await sbSaveClient(client, activeCoachId);
     }
     // Dispatch event so other systems (auto-backup, toasts) can hook in
     window.dispatchEvent(new CustomEvent('clientSaved', { detail: { indices } }));
@@ -853,7 +851,7 @@ async function _flushSave() {
     }
   } catch (e) {
     console.error('Could not save to Supabase:', e);
-    showToast('Could not save. Check connection.', 'error');
+    showToast(`Could not save — ${e.message || 'check connection'}`, 'error', 6000);
   }
 }
 
@@ -3199,6 +3197,7 @@ async function handleSignUp() {
 async function handleSignOut() {
   await sbSignOut();
   allClients = [];
+  activeCoachId = null;
   showLogin();
 }
 
@@ -3305,16 +3304,21 @@ async function init() {
     termToDays   = schema.fields.dates.term_to_days;
     bonusToDays  = schema.fields.dates.bonus_to_days;
 
-    // 3. One-time migration: if localStorage has data and Supabase is empty, auto-migrate
-    const localRaw = localStorage.getItem('clientPulse_clients');
-    let supaClients = await sbLoadClients(session.user.id);
+    // 3. Whose clients: the coach's own, or — for a team member (VA) — their coach's
+    activeCoachId = await sbResolveCoachId(session.user);
+    const isTeamMember = activeCoachId !== session.user.id;
 
-    if (localRaw && supaClients.length === 0) {
+    // One-time migration: if localStorage has data and Supabase is empty, auto-migrate
+    // (coach only — a team member's browser data never seeds the coach's account)
+    const localRaw = localStorage.getItem('clientPulse_clients');
+    let supaClients = await sbLoadClients(activeCoachId);
+
+    if (localRaw && supaClients.length === 0 && !isTeamMember) {
       try {
         const localClients = JSON.parse(localRaw);
         if (localClients.length > 0) {
           console.log(`Migrating ${localClients.length} clients from localStorage to Supabase...`);
-          supaClients = await sbSeedClients(localClients, session.user.id);
+          supaClients = await sbSeedClients(localClients, activeCoachId);
           localStorage.removeItem('clientPulse_clients');
           console.log('Migration complete.');
         }
@@ -3326,7 +3330,7 @@ async function init() {
     allClients = supaClients;
 
     // 4a. Contract history migration (one-time, skipped once each client has history)
-    await migrateContractHistories(allClients, session.user.id);
+    await migrateContractHistories(allClients, activeCoachId);
     // 4b. Project contract state onto each client (derives current term/payment from log)
     allClients.forEach(projectContractState);
 

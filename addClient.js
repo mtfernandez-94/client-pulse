@@ -205,9 +205,8 @@ async function submitNewClient() {
   };
 
   try {
-    const session = await sbGetSession();
-    if (!session) { alert('Not signed in.'); return; }
-    const saved = await sbInsertClient(client, session.user.id);
+    if (!activeCoachId) { alert('Not signed in.'); return; }
+    const saved = await sbInsertClient(client, activeCoachId); // the coach's id, also when a VA adds
     allClients.push(saved); // push version with Supabase-generated id
   } catch (e) {
     console.error('Could not save new client:', e);

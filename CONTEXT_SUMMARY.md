@@ -69,6 +69,7 @@
 - **Missing-data warning** moved from the review column to Renew Contact (`diagnoseMissingDates()`).
 - **Fix — contract edits no longer revert on reload:** term/bonus/program_start/payment are rebuilt from `contract_history` on every load, but the edit modal, reactivate, inline program-start edit and Command Center program_start/renewal wrote them directly. They now log an event via `contractSnapshot()` + `logContractEdit()` (`edit` or `renew`).
 - **Password reset:** "Forgot password?" on the login screen and "Forgot it?" in Change Password email a reset link (`sbSendPasswordReset`, redirect = site origin). Arriving via the link sets recovery mode (`type=recovery` hash / `PASSWORD_RECOVERY` event → `sbInRecovery()`), which opens "Set a New Password" without asking for the old one.
+- **Team access (VA logins):** `coach_members` + `can_access_coach()` RLS via `team-access-migration.sql`; app resolves `activeCoachId` with `sbResolveCoachId()` (falls back to own id while the table doesn't exist). `sbSaveClient` now throws when RLS silently updates 0 rows, so lost access shows a toast instead of saves vanishing.
 
 ---
 
@@ -76,7 +77,7 @@
 
 ### ~~1. Clickable Review Flags~~ ✗ **dropped** · 2026-10-16 — review feature removed
 
-### 2. Supabase RLS Verification ← **NEXT**
+### 2. Supabase RLS Verification ← **NEXT** — `team-access-migration.sql` replaces all `clients` policies with explicit ones; this is done once that SQL has been run
 - Verify RLS policy on `clients` table uses `coach_id = auth.uid()`
 - App-level filter added as defense-in-depth, but RLS is the real security layer
 

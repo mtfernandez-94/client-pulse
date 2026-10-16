@@ -99,6 +99,26 @@ function clientToRow(client, coachId) {
   return row;
 }
 
+// ── Team access ───────────────────────────────────────────────────────────
+// The coach whose clients this user works on: their coach's id if they're a
+// team member (e.g. a VA, via coach_members), otherwise their own id.
+// Every load/save/insert must use this — never session.user.id directly —
+// or a team member's saves would move clients onto their own account.
+
+async function sbResolveCoachId(user) {
+  const { data, error } = await sb
+    .from('coach_members')
+    .select('coach_id')
+    .eq('member_id', user.id)
+    .maybeSingle();
+  if (error) {
+    // Before team-access-migration.sql runs there's no table: everyone is a solo coach.
+    if (error.code === 'PGRST205' || error.code === '42P01') return user.id;
+    throw error;
+  }
+  return data?.coach_id || user.id;
+}
+
 // ── Data CRUD ─────────────────────────────────────────────────────────────
 
 async function sbLoadClients(coachId) {
@@ -112,11 +132,14 @@ async function sbLoadClients(coachId) {
 async function sbSaveClient(client, coachId) {
   if (!client.id) return;
   const row = clientToRow(client, coachId);
-  const { error } = await sb
+  const { data, error } = await sb
     .from('clients')
     .update(row)
-    .eq('id', client.id);
+    .eq('id', client.id)
+    .select('id');
   if (error) throw error;
+  // RLS turns a forbidden update into "0 rows changed", not an error — surface it.
+  if (!data || data.length === 0) throw new Error(`no access to ${client.name} (access may have been removed)`);
 }
 
 async function sbInsertClient(client, coachId) {
