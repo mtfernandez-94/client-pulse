@@ -96,8 +96,8 @@ Term `M2M` is rolling: `term_to_days` maps it to `null`, which `isRollingTerm()`
 
 A team member (e.g. the VA) signs in with their **own** account and works on the coach's clients. `coach_members` maps `member_id → coach_id`. On load, `sbResolveCoachId()` returns the coach's id for a member, else the user's own id. The result is stored in `activeCoachId` and used for every load, save and insert. RLS (`can_access_coach()`) lets the coach and their members read, add and edit. Only the coach can delete, and logged-out users see nothing. Set up and manage it with `team-access-migration.sql`:
 1. ~~Run the migration once in the Supabase SQL editor~~ ✓ **done** · 2026-10-16. `team-access-rollback.sql` restores the previous policies if ever needed.
-2. The VA clicks **Create Account** on pulse.whytbelt.com and confirms their email.
-3. Run the "Give the VA access" insert from the bottom of the file with both emails.
+2. The VA clicks **Create Account** on pulse.whytbelt.com and confirms their email. Alternatively, the coach creates the account in Supabase (Authentication → Users → Add user) and the VA sets their own password with **Forgot password?**. The reset link also confirms their email.
+3. Run the "Give the VA access" insert from the bottom of the file with both emails. ~~Link the first VA~~ ✓ **done** · 2026-10-16 (1 member in `coach_members`; verified they see all clients)
 4. To remove access, run the delete from the same file. It takes effect immediately; their saves fail with "no access" and a reload shows an empty dashboard.
 
 Reviews were removed on 2026-10-16. `reviews` is no longer read or written, and `remove-reviews-migration.sql` drops the column. Run it only after the new app version is deployed.
