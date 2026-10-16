@@ -44,7 +44,8 @@ client-pulse/
 ├── clients_seed.json       ← Seed/backup data (17KB, 17 clients)
 ├── settings_reference.json ← Reference for .claude/settings.json permissions
 ├── remove-reviews-migration.sql ← Drops the old `reviews` column (run after deploy)
-├── team-access-migration.sql ← VA/team logins: coach_members + clients RLS; add/remove VA
+├── team-access-migration.sql ← VA/team logins: coach_members + clients RLS; add/remove VA (run 2026-10-16)
+├── team-access-rollback.sql ← Restores the pre-team-access policies
 │
 ├── CNAME                   ← Custom domain (pulse.whytbelt.com)
 ├── .nojekyll               ← GitHub Pages static site flag
@@ -94,7 +95,7 @@ Term `M2M` is rolling: `term_to_days` maps it to `null`, which `isRollingTerm()`
 ### Team access (VA logins)
 
 A team member (e.g. the VA) signs in with their **own** account and works on the coach's clients. `coach_members` maps `member_id → coach_id`. On load, `sbResolveCoachId()` returns the coach's id for a member, else the user's own id. The result is stored in `activeCoachId` and used for every load, save and insert. RLS (`can_access_coach()`) lets the coach and their members read, add and edit. Only the coach can delete, and logged-out users see nothing. Set up and manage it with `team-access-migration.sql`:
-1. Run the migration once in the Supabase SQL editor (the app works before and after).
+1. ~~Run the migration once in the Supabase SQL editor~~ ✓ **done** · 2026-10-16. `team-access-rollback.sql` restores the previous policies if ever needed.
 2. The VA clicks **Create Account** on pulse.whytbelt.com and confirms their email.
 3. Run the "Give the VA access" insert from the bottom of the file with both emails.
 4. To remove access, run the delete from the same file. It takes effect immediately; their saves fail with "no access" and a reload shows an empty dashboard.

@@ -77,7 +77,7 @@
 
 ### ~~1. Clickable Review Flags~~ ✗ **dropped** · 2026-10-16 — review feature removed
 
-### 2. Supabase RLS Verification ← **NEXT** — `team-access-migration.sql` replaces all `clients` policies with explicit ones; this is done once that SQL has been run
+### ~~2. Supabase RLS Verification~~ ✓ **complete** · 2026-10-16 — `team-access-migration.sql` run; old policies were 4× `coach_id = auth.uid()` (snapshot in `team-access-rollback.sql`); coach verified to see 44/44 rows, anon sees 0
 - Verify RLS policy on `clients` table uses `coach_id = auth.uid()`
 - App-level filter added as defense-in-depth, but RLS is the real security layer
 
